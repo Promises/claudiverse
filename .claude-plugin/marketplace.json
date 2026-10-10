@@ -1,0 +1,12 @@
+{
+  "name": "claudiverse",
+  "owner": { "name": "The Claudiverse authors" },
+  "description": "claudiverse's own Claude Code plugins.",
+  "plugins": [
+    {
+      "name": "claudiverse-seat",
+      "source": "./mods/claudiverse-seat",
+      "description": "Makes every Claude Code session a claudiverse seat; works offline as plain Claude Code."
+    }
+  ]
+}

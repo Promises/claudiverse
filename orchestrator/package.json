@@ -1,0 +1,14 @@
+{
+  "name": "claudiverse-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "cvctl CLI + claudiverse-mcp MCP server for orchestrating Claude Code instances over claudiverse",
+  "bin": {
+    "cvctl": "./cvctl.mjs",
+    "claudiverse-mcp": "./cv-mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

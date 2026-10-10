@@ -1,0 +1,61 @@
+.dialog {
+  border: 2px solid var(--warning);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: var(--bg);
+}
+
+.header {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: var(--text-heading);
+}
+
+.description {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.input {
+  margin: 0 0 12px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.allowBtn,
+.denyBtn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.allowBtn {
+  background: var(--success);
+  color: white;
+}
+
+.allowBtn:hover {
+  opacity: 0.9;
+}
+
+.denyBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.denyBtn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}

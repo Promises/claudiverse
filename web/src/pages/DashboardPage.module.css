@@ -1,0 +1,209 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.navLink {
+  font-size: 14px;
+  color: var(--accent);
+  padding: 6px 4px;
+}
+
+.email {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.logoutBtn {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.logoutBtn:hover {
+  background: var(--bg-secondary);
+}
+
+.main {
+  flex: 1;
+  padding: 24px;
+  max-width: 800px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: var(--text);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.item:hover {
+  border-color: var(--accent);
+}
+
+.itemContent {
+  flex: 1;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.itemHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.itemTitle {
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+/* Secondary to .itemTitle on purpose: recognisable, but never mistaken for the
+   name you address the seat by. */
+.itemDisplayTitle {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text);
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.itemMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.fleet {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.deleteBtn {
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 0 8px 8px 0;
+}
+
+.deleteBtn:hover {
+  color: var(--danger);
+  background: rgba(220, 38, 38, 0.05);
+}
+
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+.badgeRunning {
+  background: rgba(5, 150, 105, 0.1);
+  color: var(--success);
+}
+
+.badgeStopped {
+  background: var(--bg-secondary);
+  color: var(--text);
+}
+
+.badgeCrashed {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+}
+
+/* Activity dot. Three states, distinguished by more than colour — the offline
+   one is hollow — so it still reads without colour vision. */
+.activityDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+.dotBusy {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  animation: activityPulse 1.6s ease-in-out infinite;
+}
+
+.dotIdle { background: var(--success, #4ade80); }
+
+.dotOffline {
+  background: transparent;
+  border: 1.5px solid var(--border);
+}
+
+@keyframes activityPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Respect a system preference for less motion — a pulsing dot per row is a lot
+   of movement on a busy fleet. */
+@media (prefers-reduced-motion: reduce) {
+  .dotBusy { animation: none; }
+}

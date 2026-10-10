@@ -1,0 +1,19 @@
+{
+  "name": "claudiverse-seat",
+  "version": "0.10.1",
+  "description": "Makes every Claude Code session (2.1.287+) a claudiverse seat: registration, remote input and interrupt, the message mirror, remote answers. Works offline as plain Claude Code.",
+  "author": { "name": "The Claudiverse authors" },
+  "userConfig": {
+    "server_url": {
+      "type": "string",
+      "title": "claudiverse server",
+      "description": "Address of the claudiverse server, for example http://claudiverse.example:4010. Leave empty to keep this machine's sessions out of claudiverse."
+    },
+    "seat_token": {
+      "type": "string",
+      "title": "Seat token",
+      "description": "The token this machine's seats use with the claudiverse server.",
+      "sensitive": true
+    }
+  }
+}

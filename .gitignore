@@ -1,0 +1,35 @@
+# Proprietary / separate repos / huge — NEVER commit here
+# (patch-ref = github.com/Promises/Claude-Deobfuscator-Patcher, ~2.8GB; claude-source-reference = Anthropic IP)
+patch-ref/
+claude-source-reference-*/
+
+# Secrets: token-bearing / machine-specific (use the .example templates)
+orchestrator/*.mcp.json
+!orchestrator/*.mcp.json.example
+.claude/
+CLAUDE-ENV-INFO.md
+# Prod env files: real secrets (SECRET_KEY_BASE etc.) — keep only the template.
+.env
+.env.*
+!.env.example
+
+# Deps / build / artifacts
+node_modules/
+_build/
+deps/
+.next/
+.cache/
+dist/
+*.log
+erl_crash.dump
+*.beam
+/claudiverse_server/priv/static/assets/
+
+# DB
+*.sqlite
+*.sqlite3
+*.db
+
+# OS / IDE
+.DS_Store
+.idea/

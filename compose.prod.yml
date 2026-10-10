@@ -1,0 +1,88 @@
+# Production stack for Claudiverse (Phoenix API + Vite SPA).
+#
+# Usage:
+#   cp .env.example .env   # then fill in real values
+#   docker compose -f compose.prod.yml --env-file .env up -d --build
+#
+# Independent of the dev `docker-compose.yml` (port 4000): this stack picks its
+# own ports via PORT / WEB_PORT.
+# No source bind-mounts, no install-at-boot. SQLite persists in a named volume.
+
+services:
+  server:
+    build:
+      context: ./claudiverse_server
+      dockerfile: Dockerfile
+    image: claudiverse-server:prod
+    restart: unless-stopped
+    # Docker's default json-file driver has NO max-size and NO max-file, so logs
+    # grow forever. This container hit 3.6GB in 36h (~100MB/h — the 15s
+    # healthcheck alone logs two lines per probe) and previously filled the host
+    # disk, taking the fleet down. Cap at 3x10MB.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      # Required (see .env.example):
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE in .env}
+      PHX_HOST: ${PHX_HOST:-localhost}
+      PORT: ${PORT:-4000}
+      DATABASE_PATH: /data/claudiverse.db
+      # Optional public-URL / origin tuning:
+      PHX_SCHEME: ${PHX_SCHEME:-http}
+      PHX_URL_PORT: ${PHX_URL_PORT:-${PORT:-4000}}
+      CHECK_ORIGIN: ${CHECK_ORIGIN:-false}
+      POOL_SIZE: ${POOL_SIZE:-5}
+      # ---- Anthropic account pool (AnthropicAuths) ----
+      # OPTIONAL, and deliberately not `:?` required: without it the pool simply
+      # reports itself unconfigured in the panel and refuses to store anything.
+      # It never falls back to plaintext, so deploying before the key is set is
+      # safe — the feature is inert, the rest of the server is unaffected.
+      # ⚠️ If this value CHANGES, every stored token becomes undecryptable and
+      # both accounts must be re-enrolled. It is not derived from anything.
+      CV_VAULT_KEY: ${CV_VAULT_KEY:-}
+      CV_USAGE_POLL: ${CV_USAGE_POLL:-1}
+      CV_USAGE_POLL_MS: ${CV_USAGE_POLL_MS:-300000}
+      CV_USAGE_COOLDOWN_PCT: ${CV_USAGE_COOLDOWN_PCT:-95}
+    volumes:
+      - claudiverse_db:/data
+    ports:
+      - "${PORT:-4000}:${PORT:-4000}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${PORT:-4000}/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        # Compile-time: bake the public API URL into the bundle.
+        VITE_API_URL: ${VITE_API_URL:?set VITE_API_URL in .env}
+    image: claudiverse-web:prod
+    restart: unless-stopped
+    # Same unbounded-log cap as `server` — see the note there.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  claudiverse_db:

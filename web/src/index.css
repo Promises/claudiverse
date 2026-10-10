@@ -1,0 +1,111 @@
+:root {
+  --text: #4b5563;
+  --text-heading: #111827;
+  --bg: #ffffff;
+  --bg-secondary: #f9fafb;
+  --border: #e5e7eb;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-light: #ede9fe;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --success: #059669;
+  --warning: #d97706;
+  /* Surfaces, muted text and status colours (the Accounts page). */
+  --surface: var(--bg-secondary);
+  --surface-raised: #ffffff;
+  --surface-hover: #f3f4f6;
+  --text-muted: #6b7280;
+  --link: var(--accent);
+  --track: #e5e7eb;
+  --ok-bg: #d1fae5;
+  --ok-fg: #047857;
+  --warn-bg: #fef3c7;
+  --warn-fg: #b45309;
+  --err-bg: #fee2e2;
+  --err-fg: #b91c1c;
+  --warning-bg: #fffbeb;
+  --warning-border: #f59e0b;
+
+  --sans: system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+  font: 15px/1.5 var(--sans);
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #9ca3af;
+    --text-heading: #f3f4f6;
+    --bg: #111827;
+    --bg-secondary: #1f2937;
+    --border: #374151;
+    --accent: #a78bfa;
+    --accent-hover: #8b5cf6;
+    --accent-light: rgba(139, 92, 246, 0.15);
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --surface-raised: #273244;
+    --surface-hover: #374151;
+    --text-muted: #9ca3af;
+    --track: #374151;
+    --ok-bg: #12301c;
+    --ok-fg: #6ee7a0;
+    --warn-bg: #2f2a10;
+    --warn-fg: #e7c76e;
+    --err-bg: #331616;
+    --err-fg: #f08a8a;
+    --warning-bg: #2a2410;
+    --warning-border: #8a6d1f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3 {
+  color: var(--text-heading);
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code, pre {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+}
+
+code {
+  padding: 2px 6px;
+}
+
+pre {
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}

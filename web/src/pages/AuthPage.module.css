@@ -1,0 +1,99 @@
+.container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.title {
+  font-size: 28px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  text-align: center;
+  margin-bottom: 24px;
+  color: var(--text);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+.input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--text-heading);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.button {
+  padding: 10px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.link {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.hint {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+}

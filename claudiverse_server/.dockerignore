@@ -1,0 +1,22 @@
+# Keep the build context tiny + reproducible. The repo's dev DB lives here and
+# can be >1GB — never ship it into the image.
+_build/
+deps/
+data/
+priv/static/assets/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+erl_crash.dump
+*.log
+cover/
+doc/
+.elixir_ls/
+tmp/
+.git/
+.formatter.exs
+Dockerfile
+Dockerfile.dev
+.dockerignore

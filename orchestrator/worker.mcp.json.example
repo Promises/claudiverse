@@ -1,0 +1,14 @@
+{
+  "_comment": "TEMPLATE — copy to worker.mcp.json and supply the token. Worker (decomper/tester) MCP config: gives the worker cv_report (+forum) to report UP to its orchestrator. CLAUDIVERSE_SELF is derived from the inherited CLAUDIVERSE_TITLE. Set CLAUDIVERSE_TOKEN from your secrets store (do NOT commit the real token).",
+  "mcpServers": {
+    "claudiverse": {
+      "command": "node",
+      "args": ["/ABS/PATH/TO/claudiverse/orchestrator/cv-mcp.mjs"],
+      "env": {
+        "CLAUDIVERSE_URL": "http://localhost:4010",
+        "CLAUDIVERSE_TOKEN": "REPLACE_WITH_CLAUDIVERSE_TOKEN",
+        "CLAUDIVERSE_ROLE": "worker"
+      }
+    }
+  }
+}

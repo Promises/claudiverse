@@ -1,0 +1,260 @@
+.page {
+  padding: 2rem;
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--text-muted, #8b8b8b);
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+}
+
+.warning {
+  border: 1px solid var(--warning-border, #8a6d1f);
+  background: var(--warning-bg, #2a2410);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.warningTitle {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.card {
+  border: 1px solid var(--border, #2e2e2e);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  background: var(--surface, #161616);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.label {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.email {
+  color: var(--text-muted, #8b8b8b);
+  font-size: 0.85rem;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+}
+
+.available {
+  background: var(--ok-bg, #12301c);
+  color: var(--ok-fg, #6ee7a0);
+}
+
+.cooling {
+  background: var(--warn-bg, #2f2a10);
+  color: var(--warn-fg, #e7c76e);
+}
+
+.needsReauth {
+  background: var(--err-bg, #331616);
+  color: var(--err-fg, #f08a8a);
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.5rem 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted, #8b8b8b);
+}
+
+.metaValue {
+  color: var(--text, #e4e4e4);
+}
+
+.usage {
+  margin-top: 0.9rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border, #2e2e2e);
+}
+
+.usageRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.usageLabel {
+  width: 7rem;
+  color: var(--text-muted, #8b8b8b);
+}
+
+.bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track, #2a2a2a);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--accent, #6ee7a0);
+  transition: width 0.3s ease;
+}
+
+.barFillHigh {
+  background: var(--warn-fg, #e7c76e);
+}
+
+.barFillCritical {
+  background: var(--err-fg, #f08a8a);
+}
+
+.usageValue {
+  width: 3.5rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unknown {
+  font-style: italic;
+  color: var(--text-muted, #8b8b8b);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.button {
+  border: 1px solid var(--border, #2e2e2e);
+  background: var(--surface-raised, #1e1e1e);
+  color: var(--text, #e4e4e4);
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-hover, #262626);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: var(--err-fg, #f08a8a);
+}
+
+.enrol {
+  border: 1px solid var(--border, #2e2e2e);
+  border-radius: 8px;
+  padding: 1.25rem;
+  background: var(--surface, #161616);
+}
+
+.enrolTitle {
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.step {
+  margin-bottom: 1rem;
+}
+
+.stepLabel {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+  color: var(--text-muted, #8b8b8b);
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border, #2e2e2e);
+  background: var(--surface-raised, #1e1e1e);
+  color: var(--text, #e4e4e4);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.authLink {
+  display: inline-block;
+  word-break: break-all;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--link, #7cc4ff);
+  margin-bottom: 0.5rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-muted, #8b8b8b);
+  margin-top: 0.35rem;
+}
+
+.error {
+  color: var(--err-fg, #f08a8a);
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.empty {
+  color: var(--text-muted, #8b8b8b);
+  font-style: italic;
+  padding: 1.5rem 0;
+}

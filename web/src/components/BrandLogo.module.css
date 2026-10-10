@@ -1,0 +1,8 @@
+.mark {
+  display: inline-flex;
+  flex: none;
+}
+
+.mark img {
+  display: block;
+}

@@ -1,0 +1,242 @@
+.bubble {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.user {
+  background: var(--accent-light);
+  margin-left: 40px;
+}
+
+.assistant {
+  background: var(--bg-secondary);
+  margin-right: 40px;
+}
+
+.result {
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--success);
+}
+
+.system {
+  text-align: center;
+  padding: 4px;
+  font-size: 12px;
+}
+
+.role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.content {
+  color: var(--text-heading);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.systemText {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.toolUse {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toolName {
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.toolInput {
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* --- turn structure -------------------------------------------------------
+   The user's turn reads as a spoken line, not a card: Claude web right-aligns
+   it in a soft pill, and that is the clearest signal of "who is talking"
+   without a role label on every message. */
+.user {
+  margin-left: auto;
+  margin-right: 0;
+  max-width: 70%;
+  width: fit-content;
+  border-radius: 14px;
+}
+
+/* A turn boundary. The terminal draws a rule here; "[idle]" as a word floating
+   mid-column read as content when it is punctuation. */
+.turnBreak {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+  opacity: 0.4;
+}
+
+/* --- collapsed detail -----------------------------------------------------
+   Tool calls, tool output, reasoning and injected context are all REAL and all
+   worth keeping — but a session is unreadable if each one costs a screen. They
+   share one folded, low-contrast treatment so the conversation stays the
+   foreground and the machinery stays one click away. */
+.toolResult,
+.thinking,
+.attachment {
+  margin: 4px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.toolResultSummary,
+.thinkingSummary,
+.attachmentSummary {
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.toolResultSummary:hover,
+.thinkingSummary:hover,
+.attachmentSummary:hover {
+  color: var(--text-heading);
+}
+
+/* A peek at the first line, so the common case needs no click at all. */
+.toolResultPeek {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: 0.65;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toolError {
+  border-color: var(--danger, #d05c5c);
+}
+
+.toolOutput {
+  margin: 0;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thinkingBody {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.85;
+  white-space: pre-wrap;
+}
+
+/* Status lines are punctuation, not content: centred, small, recessive. */
+.statusLine {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text);
+  opacity: 0.45;
+  padding: 2px;
+}
+
+/* --- markdown -------------------------------------------------------------
+   Assistant text is markdown and was rendering raw. Spacing is tightened from
+   browser defaults: a chat transcript reads as a column of short blocks, and
+   default h1/p margins leave it full of holes. */
+.markdown {
+  color: var(--text-heading);
+  word-break: break-word;
+}
+
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+
+.markdown p { margin: 0 0 8px; line-height: 1.55; }
+.markdown ul, .markdown ol { margin: 0 0 8px; padding-left: 22px; }
+.markdown li { margin: 2px 0; }
+
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 {
+  margin: 14px 0 6px;
+  line-height: 1.3;
+}
+.markdown h1 { font-size: 18px; }
+.markdown h2 { font-size: 16px; }
+.markdown h3, .markdown h4 { font-size: 14px; }
+
+.markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--bg-primary, rgba(0, 0, 0, 0.25));
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.markdown pre {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--bg-primary, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--border);
+  overflow: auto;
+  max-height: 420px;
+}
+
+/* The block already has the panel; nesting a second one inside looks boxed-in. */
+.markdown pre code { background: none; padding: 0; font-size: 12px; }
+
+.markdown blockquote {
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  opacity: 0.85;
+}
+
+.markdown a { color: var(--accent); }
+
+.markdown table { border-collapse: collapse; margin: 0 0 8px; font-size: 13px; }
+.markdown th, .markdown td { border: 1px solid var(--border); padding: 4px 8px; }
+
+.markdown hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+/* The terminal's "recap:" line — a summary of the turn, not part of it. */
+.recap {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text);
+  opacity: 0.7;
+  padding: 2px 4px 8px;
+}
+
+.recapLabel {
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.7;
+  margin-right: 6px;
+}
