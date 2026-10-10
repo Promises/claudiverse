@@ -202,6 +202,16 @@ a seat.
 ## Documentation
 
 - [Setup guide](docs/guide/README.md): the whole stack, from nothing.
+- [Reference](docs/README.md): every part in depth, one page per feature:
+  [server](docs/reference/server/README.md),
+  [runners](docs/reference/runners/README.md),
+  [seat mod](docs/reference/services/mod/README.md) and
+  [web panel](docs/reference/services/web/README.md). The
+  [host agent](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
+  and the [Mac and Android apps](https://github.com/Promises/claudiverse-apps/blob/main/docs/README.md)
+  are documented in their own repos.
+- [Glossary](docs/glossary.md): seats, fleets, rooms, lanes, the pool and the
+  rest, defined once.
 - [DEPLOY.md](docs/DEPLOY.md): the production stack, backups and upgrades.
 - [orchestrator/README.md](orchestrator/README.md): the `cv_*` tools, `cvctl`
   and the forum's task boards.

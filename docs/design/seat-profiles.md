@@ -10,7 +10,7 @@ Every long-lived seat today is a shell script in `~/startup-scripts/` that sets 
 bundle of environment variables and CLI flags, then execs a pinned binary:
 
 - the settings live in files on one machine, copied and edited by hand, and drift
-  apart (ipsum-admin.sh, ipsum-orchestrator.sh, lorem-admin.sh, failover.sh, claudiverse-apk.sh, …);
+  apart (lorem-lead.sh, lorem-pm.sh, ipsum-watcher.sh, standalone-failover.sh, standalone-apk.sh, …);
 - identity is easy to get wrong: claudiverse-apk ran for days with Failover's
   `CLAUDIVERSE_SELF` because both used one shared `.mcp.json`;
 - nothing restarts a seat after a reboot; the operator runs the scripts;
@@ -45,7 +45,7 @@ The new baseline does the same with no patch and no variables:
   Claude Code session id and versions. The title is the session's own name when it
   has one (`/rename`), else the folder name with a short suffix. The server may
   assign the rest at registration from simple rules (for example: this folder →
-  fleet `lorem-fleet`; notify off), and answers with what it assigned; the mod applies it.
+  fleet `ipsum`; notify off), and answers with what it assigned; the mod applies it.
 - **No server, no problem.** If registration fails, Claude works exactly as stock;
   the status line says `claudiverse offline`, and the mod retries with a growing
   delay (30 s up to 5 min), registering when the server comes back. Nothing blocks or
@@ -68,11 +68,11 @@ So there are three kinds of seat, all running the same mod:
 | Field | Example | Notes |
 |---|---|---|
 | `id` | `17` | the stable key: URLs, seat rows and saved board layouts use it |
-| `name` | `ipsum-admin` | the seat title and tmux session name; unique per user; **cannot be changed** (a rename would break tmux, layouts and history links: create a new profile instead) |
+| `name` | `lorem-lead` | the seat title and tmux session name; unique per user; **cannot be changed** (a rename would break tmux, layouts and history links: create a new profile instead) |
 | `revision` | `4` | bumped on every edit; a save sends the revision it read, and gets 409 if it changed |
-| `machine` | `my-mac.local` | a host with an online agent |
-| `folder` | `~/projects/my-app` | must be inside that machine's whitelist |
-| `fleet` | `ipsum-fleet` | declared membership (fleet board) |
+| `machine` | `lorem-mac.local` | a host with an online agent |
+| `folder` | `~/projects/lorem-api` | must be inside that machine's whitelist |
+| `fleet` | `lorem` | declared membership (fleet board) |
 | `role` | `member` / `watcher` / `orchestrator` | shown on the board; `origin` becomes `profile` |
 | `can_notify` | `true` | may page the operator (`cv_request_human`) |
 | `runtime` | `stock+mod` / `patched` | patched = today's `claude-rel`, the rollback |
@@ -149,7 +149,7 @@ The machine stays the authority, as with the whitelist today:
 
 1. Write a profile for each startup script; run it once beside the script and
    compare (same title, fleet, MCP tools, model, mode).
-2. Switch one seat at a time, ipsum-fleet first. lorem-fleet seats only via lorem-admin.
+2. Switch one seat at a time, the `lorem` fleet first. `ipsum` seats only via `ipsum-watcher`.
 3. Keep each script until its profile has run for a week; then delete the script.
 
 ## Runners (phase 4)
@@ -178,7 +178,7 @@ become configurable, not only observed.
 |---|---|
 | 1 | profiles table + API; agent `start_profile` (stock+mod, unpooled); desktop editor |
 | 2 | pooled launch (proxy `X-Claudiverse-Pool` + lease); autostart |
-| 3 | migrate the startup scripts, ipsum-fleet first |
+| 3 | migrate the startup scripts, the `lorem` fleet first |
 | 4 | runner profiles |
 
 Before phase 1, a **phase 0** brings the mod to the baseline: plugin options in place
