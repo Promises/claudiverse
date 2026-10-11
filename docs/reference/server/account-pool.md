@@ -215,6 +215,20 @@ Every change broadcasts on the PubSub topic `operator:pool`; each `operator:even
 
 The event carries no account data: clients refetch `GET /api/anthropic_auths`. Only a 429 report emits `cooling`; a poll-set cooldown is visible through `upgrade`/`degrade` only when it changes the best account. Joining `operator:events` is described in [notifications.md](notifications.md); the notification router also pings `@pool` watchers when `current_id` changes.
 
+### Pool events
+
+Every usage reading (the poller's, or **Check usage**) goes through `record_usage/2`, which compares it with the stored snapshot (`AnthropicAuths.PoolEvents`) and broadcasts what changed on the same topic, as `{"pool", event}`:
+
+| `change` | When | Limits |
+|---|---|---|
+| `reset` | the limit's `resets_at` moved to a later period: more than an hour later, or gone once the old time has passed. A percent that only dropped (a manual reset) is not a reset. | `weekly`, `session` |
+| `capped` | the percent went from below 100 to 100 or more | `weekly`, `session` |
+| `step` | the weekly percent's highest multiple of `every` (5 or 10) rose; one event for the highest multiple `crossed`. A reset starts the count from 0. | `weekly` |
+
+`weekly` is the `weekly_all` limit, `session` the 5-hour one; per-model weekly limits are not watched. Each event carries `change`, `auth_id`, `label`, `limit`, `percent`, `was` (the stored reading's percent), `resets_at`, `every` and `crossed` for a step, `text` (the one-line ping) and `at`. It has no `current_id`, so a client that refetches on every `pool` event still works.
+
+The stored snapshot is the only state, so a crossing fires once, an unchanged reading fires nothing, and the first reading after a restart is compared with the last one before it. Seats subscribe with the `@pool:…` watch titles: see [notifications.md](notifications.md).
+
 ## Configuration
 
 Environment variables (read at call time). The full list with other settings is in [configuration.md](configuration.md).

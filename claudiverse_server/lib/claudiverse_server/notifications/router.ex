@@ -22,6 +22,17 @@ defmodule ClaudiverseServer.Notifications.Router do
   Anthropic account pool's CURRENT account changes, i.e. a failover (an account
   cooled at its margin or on a 429) or a fleet-wide switch (preference, an
   upgrade back). `cv_subscribe watch=["@pool"]`; the ping names both accounts.
+
+  More reserved titles ping on an account's usage (AnthropicAuths.PoolEvents):
+
+  | Title | Pings on |
+  |---|---|
+  | `@pool:reset` | an account's weekly limit resetting |
+  | `@pool:reset:session` | its 5-hour session limit resetting |
+  | `@pool:capped` | its weekly limit reaching 100% |
+  | `@pool:capped:session` | its session limit reaching 100% |
+  | `@pool:step:10`, `@pool:step:5` | its weekly usage crossing a multiple of 10 (or 5) |
+  | `@pool:*` | all of the weekly ones (steps of 5) and the switches `@pool` pings on |
   """
   use GenServer
   require Logger
@@ -30,6 +41,7 @@ defmodule ClaudiverseServer.Notifications.Router do
   alias ClaudiverseServer.Sessions.Room
 
   @pool "@pool"
+  @pool_all "@pool:*"
 
   def start_link(_opts), do: GenServer.start_link(__MODULE__, %{}, name: __MODULE__)
 
@@ -338,6 +350,30 @@ defmodule ClaudiverseServer.Notifications.Router do
   # Create a listener entry if missing; bind a live session id if provided.
   # Never clobbers an existing watch/queue, and only overwrites session_id when a
   # non-nil one is supplied (so a forum_subscribe doesn't unbind a live watcher).
+  # A usage event (PoolEvents): ping each listener watching one of its titles,
+  # named by the title it watches, so cv_ack can clear it.
+  @impl true
+  def handle_info({"pool", %{"change" => change, "text" => text} = event}, state) when change in ~w(reset capped step) do
+    titles = pool_event_titles(event)
+
+    listeners =
+      Map.new(state.listeners, fn {ltitle, l} ->
+        case Enum.find(titles, &MapSet.member?(l.watch, &1)) do
+          nil -> {ltitle, l}
+          watched -> {ltitle, %{l | queue: l.queue ++ [%{title: watched, kind: "pool_event", text: text}]}}
+        end
+      end)
+
+    state = %{state | listeners: listeners}
+
+    state =
+      Enum.reduce(state.listeners, state, fn {ltitle, l}, acc ->
+        if l.idle and l.queue != [], do: flush(acc, ltitle), else: acc
+      end)
+
+    {:noreply, state}
+  end
+
   # A pool change whose current account moved: ping every @pool listener.
   # Other pool changes (a preference re-set to the same account, a cooling of
   # an account no lease was getting) say nothing a fleet would act on.
@@ -352,7 +388,7 @@ defmodule ClaudiverseServer.Notifications.Router do
 
       listeners =
         Map.new(state.listeners, fn {ltitle, l} ->
-          if MapSet.member?(l.watch, @pool),
+          if MapSet.member?(l.watch, @pool) or MapSet.member?(l.watch, @pool_all),
             do: {ltitle, %{l | queue: Enum.reject(l.queue, &(&1[:kind] == "pool")) ++ [ping]}},
             else: {ltitle, l}
         end)
@@ -369,6 +405,15 @@ defmodule ClaudiverseServer.Notifications.Router do
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
+
+  # The titles an event pings, most specific first.
+  defp pool_event_titles(%{"change" => "reset", "limit" => "weekly"}), do: ["@pool:reset", @pool_all]
+  defp pool_event_titles(%{"change" => "reset", "limit" => "session"}), do: ["@pool:reset:session"]
+  defp pool_event_titles(%{"change" => "capped", "limit" => "weekly"}), do: ["@pool:capped", @pool_all]
+  defp pool_event_titles(%{"change" => "capped", "limit" => "session"}), do: ["@pool:capped:session"]
+  defp pool_event_titles(%{"change" => "step", "every" => 10}), do: ["@pool:step:10"]
+  defp pool_event_titles(%{"change" => "step", "every" => 5}), do: ["@pool:step:5", @pool_all]
+  defp pool_event_titles(_), do: []
 
   defp label(nil), do: "no account (none leasable)"
 
@@ -517,6 +562,9 @@ defmodule ClaudiverseServer.Notifications.Router do
             (if ptitle, do: " “#{ptitle}”", else: "") <>
             (if by, do: " (by #{by})", else: "") <>
             " — open with cv_forum_get id=#{pid}"
+
+        %{kind: "pool_event", text: text} ->
+          text
 
         %{kind: "pool", from: from, to: to, change: change, by: by} ->
           "ACCOUNT POOL switched: leases now go to #{to} (was #{from}; #{change}#{if by, do: " by #{by}", else: ""}) — check /api/anthropic_auths"

@@ -27,7 +27,7 @@ defmodule ClaudiverseServer.AnthropicAuths do
   import Ecto.Query
 
   alias ClaudiverseServer.Repo
-  alias ClaudiverseServer.AnthropicAuths.{AnthropicAuth, Assignment, OAuth, RefreshLock, Vault}
+  alias ClaudiverseServer.AnthropicAuths.{AnthropicAuth, Assignment, OAuth, PoolEvents, RefreshLock, Vault}
 
   require Logger
 
@@ -264,14 +264,32 @@ defmodule ClaudiverseServer.AnthropicAuths do
   threshold cools down (UsagePoller.apply_threshold/1) in the same call. Every
   reading goes through here (the poll, the panel's Check usage), so none of
   them leaves a capped account leasable until the next poll.
+
+  It also announces what changed since the stored reading (PoolEvents: a
+  reset, 100%, a weekly step) on the pool topic, as `{"pool", event}` with
+  `change` reset | capped | step; Notifications.Router pings the seats
+  watching the matching `@pool:*` title.
   """
   def record_usage(%AnthropicAuth{} = auth, usage) do
+    # The stored reading, read now rather than taken from `auth`, which may be
+    # older (the poller lists every account before reading each one).
+    previous = with %AnthropicAuth{usage_snapshot: s} <- get_auth(auth.id), do: s
+
     with {:ok, updated} <-
            update_auth(auth, %{usage_snapshot: usage, usage_checked_at: DateTime.truncate(DateTime.utc_now(), :second)}) do
       ClaudiverseServer.AnthropicAuths.UsagePoller.apply_threshold(updated)
-      {:ok, get_auth(updated.id)}
+      fresh = get_auth(updated.id)
+
+      for event <- PoolEvents.detect(previous, usage, fresh) do
+        Logger.info("[anthropic_auths] #{event["text"]}")
+        Phoenix.PubSub.broadcast(ClaudiverseServer.PubSub, pool_topic(), {"pool", Map.put(event, "at", now_iso())})
+      end
+
+      {:ok, fresh}
     end
   end
+
+  defp now_iso, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
 
   # --- Enrolment ------------------------------------------------------------
 

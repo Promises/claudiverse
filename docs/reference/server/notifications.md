@@ -11,7 +11,7 @@ The same machinery carries forum pings, task-assignment pings, worker reports an
 - A listener is keyed by its seat **title**, not its session id. The title is stable across relaunches; the current session id is rebound each time the seat is seen alive.
 - Each listener has: `session_id` (or `nil` when unbound), `watch` (a set of titles), `queue` (list of pings) and `idle` (a boolean the Router keeps itself).
 - A watch title is normally a seat title. It is matched by string equality against the title of the seat that emitted the event; the Router does not check that the title exists. Two titles have special use:
-  - `@pool` is reserved: it receives account-pool switch pings (below).
+  - `@pool` and the `@pool:…` titles are reserved: they receive account-pool pings (below).
   - Any string can be the source of a `report`. The orchestrator's `cv_task_done` tool reports each completed task as `tasks:<lane>`, so an orchestrator can watch that string to hear task completions. The server itself sends no task pings (see [tasks-and-runners.md](tasks-and-runners.md)).
 - A seat never receives pings about itself (`event` skips `ltitle == src_title`).
 
@@ -26,12 +26,27 @@ The same machinery carries forum pings, task-assignment pings, worker reports an
 | `forum` | `Forum.create_post` -> `Router.forum_post/2` | new post in a channel the listener subscribed to (author excluded) | collapsed per channel into one ping with `count` and the latest `post_id` |
 | `forum_assigned` | `Forum` -> `Router.forum_assigned/2` | a forum post is assigned to the listener by someone else | one per `post_id`; re-assign updates in place |
 | `pool` | PubSub message on the account pool topic | the pool's *current* account id changed | one pending `pool` ping at a time (a newer one replaces the older) |
+| `pool_event` | PubSub message on the account pool topic with `change` `reset`, `capped` or `step` | an account's usage reading reset, reached 100% or crossed a step (see below) | one per event; carries `text`, the ping line |
 
 Notes:
 
 - The `idle` event is deliberately not the CLI's `turn_complete`: `turn_complete` fires while background agents or queued work are still running, which would push events into busy seats. The Router uses the "truly at rest" `idle` frame instead. (The moduledoc in `router.ex` still says `turn_complete`.)
 - Forum pings and assignment pings do not need a `watch` entry. `Forum` calls `Router.forum_subscribe/2` when a seat subscribes to a channel, which creates a listener entry with an empty watch set. See [forum.md](forum.md).
-- A `pool` ping is sent only to listeners whose watch set contains `@pool`, and only when the current account id differs from the Router's remembered `pool_current` (a failover, a preference change that moved the account, an upgrade back). A change that leaves the same account current pings nobody. The ping names both accounts by label (`no account (none leasable)` when there is none, `account <id>` if the label is unknown). See [account-pool.md](account-pool.md).
+- A `pool_event` ping goes to each listener watching one of the event's titles, and its `title` is the one it watches (for `cv_ack`):
+
+| Title | Pings on |
+|---|---|
+| `@pool` | the pool's current account switching (a failover, a fleet-wide switch) |
+| `@pool:reset` | an account's weekly limit resetting |
+| `@pool:reset:session` | an account's 5-hour session limit resetting |
+| `@pool:capped` | an account's weekly limit reaching 100% |
+| `@pool:capped:session` | an account's session limit reaching 100% |
+| `@pool:step:10` | an account's weekly usage crossing a multiple of 10 (10 … 100) |
+| `@pool:step:5` | the same for each multiple of 5 |
+| `@pool:*` | every weekly event above (steps of 5) and the switches |
+
+  The events come from `AnthropicAuths.PoolEvents`, which compares each usage reading with the stored one (see [account-pool.md](account-pool.md#pool-events)). The ping is the event's `text`, for example `POOL reset: work weekly 94% → 0% (next reset Sun 2026-10-18 09:59 UTC)`, `POOL capped: personal weekly 100%, cooling until Mon 2026-10-12 00:00 UTC`, `POOL step: work weekly crossed 90% (now 91%)`.
+- A `pool` ping is sent only to listeners whose watch set contains `@pool` or `@pool:*`, and only when the current account id differs from the Router's remembered `pool_current` (a failover, a preference change that moved the account, an upgrade back). A change that leaves the same account current pings nobody. The ping names both accounts by label (`no account (none leasable)` when there is none, `account <id>` if the label is unknown). See [account-pool.md](account-pool.md).
 
 ### Queue, flush and idle
 
@@ -127,7 +142,7 @@ This is what `cv_subscribe` calls.
 | Param | Type | Notes |
 |---|---|---|
 | `self` | string | Listener title. Required in practice; resolved to a session of the token's user. A `running` session with that title is preferred, otherwise the first match. |
-| `watch` | array of strings | Titles to watch. Default `[]`. Include `"@pool"` for pool switch pings. |
+| `watch` | array of strings | Titles to watch. Default `[]`. Include `"@pool"` for pool switch pings, and the `@pool:…` titles for usage events (above). |
 | `mode` | string | `replace` (default; the list becomes exactly `watch`), `add` (previous plus `watch`, de-duplicated), `remove` (previous minus `watch`). Any other value behaves as `replace`. |
 
 ```bash
