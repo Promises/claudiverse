@@ -38,6 +38,15 @@ defmodule ClaudiverseServer.Sessions.Room do
   # any of them back (the replay already skipped stream_event).
   @live_only ~w(stream_event progress set_in_progress_tool_use_ids interruptible_tool_in_progress stream_request_start)
 
+  # Rows that say nothing about whether the seat is working: they leave its
+  # readiness as it was. A compaction is reported as its own row (the mod's
+  # session.compact) and can land with no turn after it: compacted while idle,
+  # or the mod's /compact inbox command, whose idle frame can arrive first.
+  # Counted as work, it read busy until the next turn. MEASURED 2026-10-11:
+  # lorem-orchestrator went idle->busy trigger=compact at 10:23:57Z and
+  # stayed busy ~20 min; every cv_send to it was refused as busy meanwhile.
+  @readiness_neutral ~w(compact)
+
   defstruct [
     :session_id,
     :sidecar_channel_pid,
@@ -859,7 +868,7 @@ defmodule ClaudiverseServer.Sessions.Room do
     # Track idle for reject-busy: idle is true only on the synthetic "idle" frame.
     # Observability: when the flag actually flips, log + persist the transition
     # (which msg_type drove it). ~2 rows per idle cycle; best-effort, off the path.
-    new_idle = msg_type == "idle"
+    new_idle = if msg_type in @readiness_neutral, do: state.idle, else: msg_type == "idle"
 
     if new_idle != state.idle do
       from = if state.idle, do: "idle", else: "busy"
@@ -875,7 +884,9 @@ defmodule ClaudiverseServer.Sessions.Room do
       })
     end
 
-    %{state | message_buffer: buffer, sequence: state.sequence + 1, idle: new_idle, readiness_known: true}
+    readiness_known = state.readiness_known or msg_type not in @readiness_neutral
+
+    %{state | message_buffer: buffer, sequence: state.sequence + 1, idle: new_idle, readiness_known: readiness_known}
     |> settle_hook_permissions(msg_type, message)
   end
 
