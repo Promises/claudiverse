@@ -1,6 +1,6 @@
 {
   "name": "claudiverse",
-  "owner": { "name": "The Claudiverse authors" },
+  "owner": { "name": "Henning Berge" },
   "description": "claudiverse's own Claude Code plugins.",
   "plugins": [
     {

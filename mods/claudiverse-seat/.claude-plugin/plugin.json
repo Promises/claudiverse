@@ -2,7 +2,7 @@
   "name": "claudiverse-seat",
   "version": "0.10.1",
   "description": "Makes every Claude Code session (2.1.287+) a claudiverse seat: registration, remote input and interrupt, the message mirror, remote answers. Works offline as plain Claude Code.",
-  "author": { "name": "The Claudiverse authors" },
+  "author": { "name": "Henning Berge" },
   "userConfig": {
     "server_url": {
       "type": "string",
