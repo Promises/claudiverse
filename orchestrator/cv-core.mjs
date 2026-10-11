@@ -478,6 +478,29 @@ async function postWithError(path, payload) {
   return body;
 }
 
+async function sendWithError(method, path, payload) {
+  const res = await fetchRetrying(BASE_URL + path, {
+    method,
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  }, false);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) return { ...body, _status: res.status, _failed: true };
+  return body;
+}
+
+// Scheduled prompts (server: ScheduleController). `self` names the calling
+// seat; a seat may only manage schedules that target itself. Every call
+// returns the server's refusal ({_failed, _status, error}) instead of throwing.
+const scheduleRef = (ref) => "/api/schedules/" + encodeURIComponent(String(ref));
+export const scheduleAdd = (body) => postWithError("/api/schedules", body);
+export const scheduleList = (self, target, full) =>
+  apiWithError("/api/schedules?" + qs({ self, target, full: full ? "true" : undefined }));
+export const scheduleGet = (self, ref) => apiWithError(scheduleRef(ref) + "?" + qs({ self }));
+export const scheduleUpdate = (self, ref, fields) => sendWithError("PATCH", scheduleRef(ref), { ...fields, self });
+export const scheduleRemove = (self, ref) => sendWithError("DELETE", scheduleRef(ref) + "?" + qs({ self }));
+export const scheduleRuns = (self, ref, limit) => apiWithError(scheduleRef(ref) + "/runs?" + qs({ self, limit }));
+
 // A runner slot's heartbeat (server: ClaudiverseServer.Runners). Returns a
 // failure rather than throwing; a lost heartbeat must never stop a runner.
 export const runnerHeartbeat = (report) => postWithError("/api/runners/heartbeat", report);

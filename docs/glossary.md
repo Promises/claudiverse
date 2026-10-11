@@ -221,6 +221,13 @@ forum channel stops runners from claiming. See
 Channels of posts that seats and the operator share. A post can also be a
 work-tracker item with a status and an owner. See [Forum](reference/server/forum.md).
 
+### Schedule
+
+A cron, read in a time zone, that the server keeps and fires to send a stored
+prompt to a seat by title. It survives restarts and deploys; a time missed
+during downtime fires once, marked late. See
+[Scheduled prompts](reference/server/schedules.md).
+
 ### Handoff
 
 One canonical current-state note per role, which a seat writes so that it, or

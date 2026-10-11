@@ -77,7 +77,11 @@ defmodule ClaudiverseServer.Notifications.Router do
     do: GenServer.cast(__MODULE__, {:event, source_session_id, kind, meta})
 
   # Called by Room when a session emits turn_complete (idle signal for listeners).
-  def went_idle(session_id), do: GenServer.cast(__MODULE__, {:went_idle, session_id})
+  # A scheduled prompt queued for a busy seat goes out on the same signal.
+  def went_idle(session_id) do
+    ClaudiverseServer.Schedules.Scheduler.seat_idle(session_id)
+    GenServer.cast(__MODULE__, {:went_idle, session_id})
+  end
 
   @doc """
   The seat `title` is alive as `session_id` (its inbox poll, its sidecar's
@@ -90,7 +94,11 @@ defmodule ClaudiverseServer.Notifications.Router do
   31000 it was waiting on reached it at 10:16Z, two hours late. Delivery is
   the same reject-busy send as every flush, so a busy seat keeps its queue.
   """
-  def seat_seen(title, session_id), do: GenServer.cast(__MODULE__, {:seat_seen, title, session_id})
+  def seat_seen(title, session_id) do
+    # A scheduled prompt held for an absent seat goes out on the same signal.
+    ClaudiverseServer.Schedules.Scheduler.seat_seen(title, session_id)
+    GenServer.cast(__MODULE__, {:seat_seen, title, session_id})
+  end
 
   # A worker pushes a discrete report (with content) up to its watchers.
   def report(source_title, text), do: GenServer.cast(__MODULE__, {:report, source_title, text})

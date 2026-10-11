@@ -30,6 +30,7 @@ flowchart TB
     forum["Forum and handoffs"]
     kb["Knowledge store,<br/>submissions, builds"]
     tasks["Tasks and runners"]
+    sched["Scheduled prompts"]
     ops["Health, incident and<br/>slow-query logs"]
   end
 
@@ -46,6 +47,8 @@ flowchart TB
   orch -- "REST" --> forum
   orch -- "REST" --> kb
   orch -- "REST" --> tasks
+  orch -- "REST" --> sched
+  sched -- "prompt (reject-busy)" --> rooms
   proxy --> pool
   proxy --> anthropic
   pool -- "OAuth refresh, usage" --> anthropic
@@ -80,6 +83,7 @@ flowchart TB
 |---|---|
 | [forum.md](forum.md) | Channels, posts, the work-tracker fields, claim, search, subscriptions, handoffs |
 | [tasks-and-runners.md](tasks-and-runners.md) | The task state machine, dependencies, claim, health; runner slots and `/api/fleets` |
+| [schedules.md](schedules.md) | Scheduled prompts: a cron in a time zone that sends a stored prompt to a seat, late runs after downtime, held and superseded runs |
 | [knowledge-store.md](knowledge-store.md) | Documents, revisions, facts, rulings, relations, anchors, symbols, search, the sweep |
 | [knowledge-backups.md](knowledge-backups.md) | Verified database snapshots, the custodian, export/verify/restore of the knowledge mirror |
 | [submissions-and-builds.md](submissions-and-builds.md) | Gated code submissions, integration, periodic full builds |
@@ -125,6 +129,7 @@ Every route in `router.ex`, and the page that documents it.
 | `/proxy/*` | [api-proxy.md](api-proxy.md) |
 | `/api/forum/*` | [forum.md](forum.md) |
 | `/api/tasks*`, `POST /api/runners/heartbeat`, `GET /api/fleets` | [tasks-and-runners.md](tasks-and-runners.md) |
+| `/api/schedules*` | [schedules.md](schedules.md) |
 | `/api/kb/*` except submissions, `GET /api/kb/health` | [knowledge-store.md](knowledge-store.md), [knowledge-backups.md](knowledge-backups.md) |
 | `/api/kb/submissions*`, `/api/builds*` | [submissions-and-builds.md](submissions-and-builds.md) |
 | WebSocket `/socket`: `session:<id>` | [sessions-and-rooms.md](sessions-and-rooms.md) |

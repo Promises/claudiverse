@@ -18,6 +18,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import * as cv from "./cv-core.mjs";
 import { allowedGroup } from "./cv-policy.mjs";
+import * as sched from "./cv-schedules.mjs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -2368,6 +2369,110 @@ server.registerTool(
     return text(r.addresses.map((a) => `0x${a.address} [${a.build}] ${a.current ? "(current)" : "(FORMER name)"}`).join("\n"));
   }
 );
+
+// --- scheduled prompts --------------------------------------------------------
+// A cron kept by the server: it outlives restarts, compactions and deploys
+// (Claude Code's CronCreate lasts one session, at most 7 days). A seat manages
+// only schedules that target itself. Refusals read as refusals, and a prompt
+// is never cut (cv-schedules.mjs).
+currentGroup = "full";
+if (DYNAMIC || ROLE !== "worker") {
+const scheduleRef = z.union([z.number().int(), z.string()]).describe("the schedule's id or name");
+
+server.registerTool(
+  "cv_schedule_add",
+  {
+    description:
+      "Schedule a prompt to this seat on a cron, kept by the server: it survives restarts, compactions and deploys, with no expiry. A due time missed while the server was down fires once, marked LATE; a prompt for a seat that is not running is held until it is. The prompt must be SELF-CONTAINED (it may reach a brand-new seat with no context): up to 20,000 characters, stored and delivered exactly.",
+    inputSchema: {
+      name: z.string().describe("short and unique, e.g. weekly-review (A-Z a-z 0-9 . _ -)"),
+      cron: z.string().describe("5 fields, minute hour day-of-month month day-of-week, e.g. '0 12 * * 0' = Sundays 12:00"),
+      tz: z.string().optional().describe(`IANA zone the cron is read in (default ${sched.DEFAULT_TZ}); 12:00 stays 12:00 local across DST`),
+      prompt: z.string().describe("the whole brief, up to 20,000 characters"),
+      target: z.string().optional().describe("the seat title; defaults to this seat, and a seat can only target itself"),
+    },
+  },
+  async ({ name, cron, tz, prompt, target }) => {
+    const r = await cv.scheduleAdd({ self: SELF ?? undefined, name, cron, tz: tz || sched.DEFAULT_TZ, prompt, target });
+    return text(sched.refusal(r, `schedule ${name}`) ?? sched.added(r.schedule, prompt));
+  }
+);
+
+server.registerTool(
+  "cv_schedule_list",
+  {
+    description: "This seat's scheduled prompts with their next fire times, and each prompt's length, sha256 and first 120 characters. full=true prints every prompt in full.",
+    inputSchema: {
+      target: z.string().optional().describe("an app token may list another seat's; a seat sees its own"),
+      full: z.boolean().optional(),
+    },
+  },
+  async ({ target, full }) => {
+    const r = await cv.scheduleList(SELF ?? undefined, target, full);
+    const no = sched.refusal(r, "list schedules");
+    if (no) return text(no);
+    if (!r.schedules.length) return text("no schedules");
+    return text(r.schedules.map((s) => sched.scheduleLine(s) + (full ? "\n" + sched.fullPrompt(s) : "")).join("\n\n"));
+  }
+);
+
+server.registerTool(
+  "cv_schedule_get",
+  {
+    description: "One scheduled prompt with its FULL stored text, verbatim, and its sha256 to check it against.",
+    inputSchema: { schedule: scheduleRef },
+  },
+  async ({ schedule }) => {
+    const r = await cv.scheduleGet(SELF ?? undefined, schedule);
+    return text(sched.refusal(r, `read schedule ${schedule}`) ?? sched.scheduleLine(r.schedule) + "\n" + sched.fullPrompt(r.schedule));
+  }
+);
+
+for (const [tool, enabled, verb] of [["cv_schedule_pause", false, "pause"], ["cv_schedule_resume", true, "resume"]]) {
+  server.registerTool(
+    tool,
+    {
+      description:
+        enabled
+          ? "Resume a paused schedule. It fires next at its next time from now; occurrences missed while paused do not fire late."
+          : "Pause a schedule: it stops firing, and a prompt it holds for its seat waits until it is resumed.",
+      inputSchema: { schedule: scheduleRef },
+    },
+    async ({ schedule }) => {
+      const r = await cv.scheduleUpdate(SELF ?? undefined, schedule, { enabled });
+      return text(sched.refusal(r, `${verb} schedule ${schedule}`) ?? `${verb}d: ${sched.scheduleLine(r.schedule)}`);
+    }
+  );
+}
+
+server.registerTool(
+  "cv_schedule_remove",
+  {
+    description: "Delete a scheduled prompt and its run history.",
+    inputSchema: { schedule: scheduleRef },
+  },
+  async ({ schedule }) => {
+    const r = await cv.scheduleRemove(SELF ?? undefined, schedule);
+    return text(sched.refusal(r, `remove schedule ${schedule}`) ?? `removed schedule #${r.deleted.id} ${r.deleted.name}`);
+  }
+);
+
+server.registerTool(
+  "cv_schedule_runs",
+  {
+    description: "A schedule's run history, newest first: each firing's due and fired time, LATE, its status (delivered, queued for a busy seat, waiting_for_seat, superseded) and the sha256 of the prompt it delivered.",
+    inputSchema: { schedule: scheduleRef, limit: z.number().int().optional().describe("default 50") },
+  },
+  async ({ schedule, limit }) => {
+    const r = await cv.scheduleRuns(SELF ?? undefined, schedule, limit);
+    const no = sched.refusal(r, `read the runs of schedule ${schedule}`);
+    if (no) return text(no);
+    const head = sched.scheduleLine(r.schedule);
+    return text(r.runs.length ? head + "\n" + r.runs.map(sched.runLine).join("\n") : head + "\nno runs yet");
+  }
+);
+}
+currentGroup = "all";
 
 // --- the tool policy --------------------------------------------------------
 // Which groups a role may use: a runner's worker only reports and shares the

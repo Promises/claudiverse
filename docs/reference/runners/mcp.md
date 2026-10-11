@@ -42,7 +42,7 @@ Each tool is tagged with the group that was current when it was registered. The 
 |---|---|---|
 | `report` | `cv_report` | Push a report up to whoever watches this seat. |
 | `notify` | `cv_request_human` | Page the human operator. |
-| `full` | `cv_list`, `cv_status`, `cv_subscribe`, `cv_pending`, `cv_ack`, `cv_tail`, `cv_last`, `cv_questions`, `cv_send`, `cv_answer`, `cv_decline` | The orchestrator set: watch, read and drive other seats. |
+| `full` | `cv_list`, `cv_status`, `cv_subscribe`, `cv_pending`, `cv_ack`, `cv_tail`, `cv_last`, `cv_questions`, `cv_send`, `cv_answer`, `cv_decline`, the `cv_schedule_*` tools | The orchestrator set: watch, read and drive other seats, and schedule prompts to itself. |
 | shared (any other tag) | the forum, handoff, task, submission, ledger, knowledge-store and symbol tools; also `cv_spawn`, `cv_stop`, `cv_ps` when registered | Available to every role. |
 
 `allowedGroup(group, role, canNotify)` in `cv-policy.mjs` decides whether a group is enabled:
@@ -170,6 +170,7 @@ The tools are documented per group. Every tool listed as "shared" is available t
 | [mcp-ledger.md](mcp-ledger.md) | shared | `cv_fact_add`, `cv_fact_relate`, `cv_fact_get`, `cv_ruling_add` |
 | [mcp-knowledge.md](mcp-knowledge.md) | shared | `cv_doc_put`, `cv_doc_get`, `cv_doc_revise`, `cv_doc_relate`, `cv_doc_search`, `cv_doc_anchor`, `cv_doc_history`, `cv_doc_stale`, `cv_address`, `cv_symbol_record`, `cv_symbol_resolve` |
 | [mcp-submissions.md](mcp-submissions.md) | shared | `cv_submit_match`, `cv_submission_list`, `cv_submission_get` |
+| [mcp-schedules.md](mcp-schedules.md) | full | `cv_schedule_add`, `cv_schedule_list`, `cv_schedule_get`, `cv_schedule_pause`, `cv_schedule_resume`, `cv_schedule_remove`, `cv_schedule_runs` |
 
 ### Standing instruction for an orchestrator
 

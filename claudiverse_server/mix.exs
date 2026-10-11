@@ -63,7 +63,11 @@ defmodule ClaudiverseServer.MixProject do
       # Claude Code turn needs.
       {:finch, "~> 0.19"},
       {:bcrypt_elixir, "~> 3.0"},
-      {:corsica, "~> 2.1"}
+      {:corsica, "~> 2.1"},
+      # Scheduled prompts (ClaudiverseServer.Schedules): cron parsing and the next
+      # time, in the schedule's IANA zone so 12:00 local survives a DST change.
+      {:crontab, "~> 1.2"},
+      {:tz, "~> 0.28"}
     ]
   end
 

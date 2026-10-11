@@ -606,6 +606,46 @@ Purpose: which seat is on which pool account, recorded at the moment the server 
 
 Indexes: `anthropic_auth_id`; partial unique `(instance_id) WHERE instance_id IS NOT NULL` named `anthropic_auth_assignments_instance_id_index`; partial unique `(title) WHERE instance_id IS NULL` named `anthropic_auth_assignments_title_legacy_index`. The original plain unique index on `title` was created by the first migration and dropped by `assignments_key_on_instance`: rows are now one-per-`instance_id` for clients that send one, and one-per-`title` only for legacy clients that do not.
 
+## Scheduled prompts
+
+### `schedules`
+
+Purpose: a cron in an IANA zone that sends `prompt` to the seat titled `target_title`. Schema `Schedules.Schedule`, context `Schedules`. Feature page: [schedules.md](schedules.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `name` | string | not null. Unique per user |
+| `target_title` | string | not null |
+| `cron` | string | not null. 5 fields |
+| `tz` | string | not null. IANA zone name |
+| `prompt` | text | not null. Up to 20,000 characters, stored exactly |
+| `enabled` | boolean | not null, `true` |
+| `created_by` | string | not null. The creating seat's title, or `app` |
+| `next_fire_at` | utc_datetime | null when the cron reaches no time |
+| `last_fired_at` | utc_datetime | null |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, name)`; `(enabled, next_fire_at)`; `(user_id, target_title)`.
+
+### `schedule_runs`
+
+Purpose: one row per firing of a schedule. Schema `Schedules.Run`.
+
+| Column | Type | Null / default |
+|---|---|---|
+| `schedule_id` | references `schedules` | not null; `on_delete: :delete_all` |
+| `due_at` | utc_datetime | not null. The time the cron named |
+| `fired_at` | utc_datetime | not null |
+| `delivered_at` | utc_datetime | null until delivered |
+| `late` | boolean | not null, `false`. Fired more than 90 s after `due_at` |
+| `status` | string | not null: `queued`, `waiting_for_seat`, `delivered` or `superseded` |
+| `session_id` | integer | null. The session row it reached (set while queued too). No foreign key |
+| `prompt_sha256` | string | null until delivered. The sha256 (hex) of the prompt it carried |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: `(schedule_id, due_at)`; `(status)`.
+
 ## App builds
 
 ### `app_builds`
@@ -653,6 +693,7 @@ Everything below is created from the supervision tree in `application.ex` (or fr
 | `LoginThrottle` | Failed sign-in timestamps per client address | The failure counts (a locked-out address is unlocked) |
 | `Setup` | The first account's one-time setup code | The code; a new one is generated at every boot while no user exists |
 | `Runners` | Runner slot registry built from heartbeats | All slots, until each runner's next heartbeat (about 30 seconds) |
+| `Schedules.Scheduler` | Its 30-second timer, and the targets of pending runs (a cache of `schedule_runs`) | Nothing durable: the first tick at boot fires what came due during the downtime (once, late) and reloads the targets |
 | `Hosts` plus `Hosts.Registry` and `Hosts.Requests` (from `Hosts.child_specs/0`) | Which host agents are connected, pending relayed requests, spawn rate-limit bookkeeping | Presence and in-flight requests; agents reconnect and re-register |
 | `Phoenix.PubSub`, `Telemetry`, `DNSCluster`, `Endpoint` | Channel subscriptions, metrics, sockets | All connections; clients reconnect |
 
@@ -705,6 +746,7 @@ Migrations run automatically at boot in a release: `application.ex` starts `Ecto
 | `20261006010000_add_access_to_sessions` | `sessions.access` |
 | `20261006020000_add_notify_grant_to_sessions` | `sessions.notify_grant`, `notify_until` |
 | `20261006030000_rebuild_kb_revisions_fts_without_title` | Drops and recreates `kb_revisions_fts` (and its triggers) without the phantom `title` column, then runs FTS5 `'rebuild'` |
+| `20261011120000_create_schedules` | `schedules`, `schedule_runs` and their indexes |
 
 Notes on running them:
 

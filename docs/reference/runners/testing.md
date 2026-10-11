@@ -12,9 +12,11 @@ flowchart LR
   V[validation.test.mjs] --> CV[cv-validation.mjs]
   R[request-human.test.mjs] -->|stub globalThis.fetch| CC[cv-core.mjs]
   S[spawn.test.mjs] -->|stub tmux + claude on PATH| SH[cv-spawn.sh]
+  SC[schedules.test.mjs] -->|stub globalThis.fetch| CC
+  SC --> CS[cv-schedules.mjs]
 ```
 
-There are four test files, in two styles: three use the `node:test` runner (`test(...)` blocks), and `request-human.test.mjs` is a plain script that uses `node:assert/strict` and exits non-zero on a failed assertion.
+There are five test files, in two styles: three use the `node:test` runner (`test(...)` blocks), and `request-human.test.mjs` and `schedules.test.mjs` are plain scripts that use `node:assert/strict` and exit non-zero on a failed assertion.
 
 ### policy.test.mjs
 
@@ -49,6 +51,19 @@ Isolation: the script sets `process.env.CLAUDIVERSE_URL = "http://stub"`, replac
 
 On success it prints one line: `requestHuman: success reads as 200/open, refusal as 403 with its error`.
 
+### schedules.test.mjs
+
+Modules under test: the `schedule*` functions in `cv-core.mjs` and the answer wording in `cv-schedules.mjs`, which the `cv_schedule_*` tools use. See [mcp-schedules.md](mcp-schedules.md). Isolation as in `request-human.test.mjs`: `fetch` is stubbed with a queue of canned replies (and records each request) before `cv-core.mjs` is imported.
+
+| Check | Intent |
+|---|---|
+| Refusals | 403, 422 (over the limit, a bad cron), 400 and 404 replies to `scheduleAdd`, and a 403 to each of update, remove, runs, get and list, all read as `REFUSED (HTTP <status>)` with the server's reason. A success is no refusal. |
+| Requests | Pause sends `PATCH` with `{enabled: false, self}`; remove sends `DELETE /api/schedules/7?self=s`. |
+| Stored exactly | `added` reports `stored exactly` when the server's sha256 and length match the 20,000-character multi-byte prompt sent, and `STORED TEXT DIFFERS` when the server kept only 1,500 characters. |
+| No cut | `fullPrompt` prints the 20,000-character prompt verbatim between its markers (same text, same sha256); the list line shows the length, sha256 and a JSON-quoted 120-character preview on one line. |
+
+On success it prints one line: `cv_schedule_*: refusals read as REFUSED with the server's reason; prompts round-trip whole`.
+
 ### spawn.test.mjs
 
 Module under test: `cv-spawn.sh`, specifically the launch line it sends to the seat's shell for the three login/pool modes and one refused combination. See [cv-spawn.md](cv-spawn.md).
@@ -76,7 +91,7 @@ There is no `test` script in `orchestrator/package.json` (it has only `bin` and 
 |---|---|
 | Node | A current Node (22 or later). The tests use `node:test` and `import.meta.dirname`; both are recent additions. |
 | Shell | `bash` must be on `PATH` (spawn tests run `cv-spawn.sh` through it and the stub `tmux` and `claude` are bash scripts). |
-| Server | None. No test calls a real server; `request-human.test.mjs` stubs `fetch`. |
+| Server | None. No test calls a real server; `request-human.test.mjs` and `schedules.test.mjs` stub `fetch`. |
 | Environment | `spawn.test.mjs` blanks the three `CV_SPAWN_*` variables above itself. |
 
 ## Interface
@@ -87,8 +102,9 @@ Run from the repository (worktree) root:
 # node:test files
 node --test orchestrator/test/policy.test.mjs orchestrator/test/validation.test.mjs orchestrator/test/spawn.test.mjs
 
-# plain assert script
+# plain assert scripts
 node orchestrator/test/request-human.test.mjs
+node orchestrator/test/schedules.test.mjs
 ```
 
 At the time of writing, the `node --test` run reports 12 tests, 12 pass, 0 fail (3 policy, 5 validation, 4 spawn), and the plain script prints its one success line and exits 0. The spawn tests dominate the run time (well under a few seconds in total).
@@ -108,7 +124,7 @@ The plain script has no summary output: success is the printed line and exit sta
 
 ## What is not covered
 
-These parts have no automated tests here: the `cv-runner.mjs` loop (claiming, reaping, HALT and drain, validation creation end to end), the `cv-mcp.mjs` tool handlers, `cvctl.mjs`, `cv-subs.mjs`, and `cv-escalations.mjs`. Only `allowedGroup`, the validation exemption helpers, `requestHuman` and the `cv-spawn.sh` launch line are exercised. Changes to the other modules need manual verification against a running server and tmux.
+These parts have no automated tests here: the `cv-runner.mjs` loop (claiming, reaping, HALT and drain, validation creation end to end), the `cv-mcp.mjs` tool handlers, `cvctl.mjs`, `cv-subs.mjs`, and `cv-escalations.mjs`. Only `allowedGroup`, the validation exemption helpers, `requestHuman`, the `schedule*` client functions with their answer wording, and the `cv-spawn.sh` launch line are exercised. Changes to the other modules need manual verification against a running server and tmux.
 
 ## Related pages
 

@@ -63,6 +63,7 @@ Flush triggers:
 - A new event/report/forum/pool ping was queued and the listener has `idle: true`.
 - `went_idle(session_id)`: the `Room` calls this when its seat reports idle (the `idle` frame, an inbox hint `SessionStart`/`Stop`/`Notification`, or a state reconcile that finds the seat idle). If no listener has that session id yet, the Router looks up the session's title and rebinds a rehydrated listener by title.
 - `seat_seen(title, session_id)`: called when a sidecar joins `session:<id>` as `sidecar` and on every inbox poll. It rebinds the listener to that session id and flushes any queued pings, so a seat that was already idle across a server restart does not wait for its next finished turn.
+- Both also tell `Schedules.Scheduler`, which delivers a scheduled prompt queued for that seat (busy at fire time) or held for its title (absent at fire time). See [schedules.md](schedules.md).
 
 Delivered text has this shape (items joined by `; `):
 

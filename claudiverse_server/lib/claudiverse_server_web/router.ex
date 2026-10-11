@@ -158,6 +158,14 @@ defmodule ClaudiverseServerWeb.Router do
     post "/tasks/:id/supersede", TaskController, :supersede
     post "/tasks/:id/deps", TaskController, :add_dep
 
+    # Scheduled prompts (ClaudiverseServer.Schedules)
+    get "/schedules", ScheduleController, :index
+    post "/schedules", ScheduleController, :create
+    get "/schedules/:id", ScheduleController, :show
+    patch "/schedules/:id", ScheduleController, :update
+    delete "/schedules/:id", ScheduleController, :delete
+    get "/schedules/:id/runs", ScheduleController, :runs
+
     # Component D — periodic full builds
     get "/builds/due", BuildController, :due
     get "/builds/suspects", BuildController, :suspects

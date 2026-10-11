@@ -61,6 +61,7 @@ An orchestrator seat subscribes to the seats it manages and is pinged when they 
 | [mcp-ledger.md](mcp-ledger.md) | `cv_fact_add`, `cv_fact_relate`, `cv_fact_get`, `cv_ruling_add` |
 | [mcp-knowledge.md](mcp-knowledge.md) | `cv_doc_put`, `cv_doc_get`, `cv_doc_revise`, `cv_doc_relate`, `cv_doc_search`, `cv_doc_anchor`, `cv_doc_history`, `cv_doc_stale`, `cv_address`, `cv_symbol_record`, `cv_symbol_resolve` |
 | [mcp-submissions.md](mcp-submissions.md) | `cv_submit_match`, `cv_submission_list`, `cv_submission_get` |
+| [mcp-schedules.md](mcp-schedules.md) | `cv_schedule_add`, `cv_schedule_list`, `cv_schedule_get`, `cv_schedule_pause`, `cv_schedule_resume`, `cv_schedule_remove`, `cv_schedule_runs` |
 
 ### Libraries, CLIs and tests
 

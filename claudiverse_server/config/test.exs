@@ -37,3 +37,6 @@ config :claudiverse_server, ClaudiverseServer.Sessions.ZombieSweep, enabled: fal
 # A lost sidecar's grace before its session counts as ended (Room :DOWN);
 # short here so tests of a real disconnect stay fast.
 config :claudiverse_server, sidecar_grace_ms: 100
+
+# Tests fire schedules with Scheduler.tick/1 inside their sandbox.
+config :claudiverse_server, ClaudiverseServer.Schedules.Scheduler, enabled: false

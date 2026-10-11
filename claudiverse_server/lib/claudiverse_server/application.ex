@@ -45,6 +45,8 @@ defmodule ClaudiverseServer.Application do
       # The first account's one-time setup code, while there is no account.
       ClaudiverseServer.Setup,
       ClaudiverseServer.Runners,
+      # Scheduled prompts: fires due schedules every 30 s, and first at boot.
+      ClaudiverseServer.Schedules.Scheduler,
     ] ++ ClaudiverseServer.Hosts.child_specs() ++ [
       ClaudiverseServerWeb.Endpoint
     ]

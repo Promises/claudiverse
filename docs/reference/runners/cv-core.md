@@ -42,7 +42,7 @@ The exported functions fall into five conventions. A caller must know which one 
 | Convention | Used by | On a non-2xx response |
 |---|---|---|
 | Throw | `api`, `postApi`, `patchApi`, `deleteApi` (internal helpers) | Throws `Error("<METHOD> <path> → <status> <statusText>")`. The response body is lost. |
-| Return with flag | `apiWithError`, `postWithError` (internal helpers) | Returns `{...body, _status, _failed: true}`. On success returns the body unchanged. |
+| Return with flag | `apiWithError`, `postWithError`, `sendWithError` (internal helpers) | Returns `{...body, _status, _failed: true}`. On success returns the body unchanged. |
 | Claim result | `forumClaim` | `409` returns `{claimed: false, heldBy}`, `404` returns `{claimed: false, notFound: true}`. Any other non-2xx throws `POST claim <id> → <status> <statusText>`. Success returns `{claimed: true, post}`. |
 | Absent handoff | `handoffGet` | `404` returns `{handoff: null, status: 404, error}`. Any other non-2xx throws `GET <path> → <status> <statusText>`. |
 | Human request | `requestHuman` | Never inspects `ok`. Always returns `{...body, http: <status>}`, so a refusal (for example 403) is a value. |
@@ -174,6 +174,17 @@ Use `forumClaim` to take an unowned task atomically; use `forumAssign` only to r
 | `taskProgress(id, b)` | `POST /api/tasks/<id>/progress` | Flag |
 | `taskComplete(id, b)` | `POST /api/tasks/<id>/complete` | Flag |
 | `taskRelease(id, b)` | `POST /api/tasks/<id>/release` | Flag |
+
+**Scheduled prompts** (see [mcp-schedules.md](mcp-schedules.md))
+
+| Function | Request | Convention |
+|---|---|---|
+| `scheduleAdd(body)` | `POST /api/schedules` `{self, name, cron, tz, prompt, target}` | Flag |
+| `scheduleList(self, target, full)` | `GET /api/schedules?self=&target=&full=true` | Flag |
+| `scheduleGet(self, ref)` | `GET /api/schedules/<id or name>?self=` | Flag |
+| `scheduleUpdate(self, ref, fields)` | `PATCH /api/schedules/<id or name>` `{...fields, self}` | Flag |
+| `scheduleRemove(self, ref)` | `DELETE /api/schedules/<id or name>?self=` | Flag |
+| `scheduleRuns(self, ref, limit)` | `GET /api/schedules/<id or name>/runs?self=&limit=` | Flag |
 
 Several exports are not used by any MCP tool and exist for other callers: `kbCheck`, `subGate`, `subIntegrate`, `subRevert`, `subBlindGates`, `taskChain`, `isLiveHalt`, plus the constants and helpers the runner uses directly (`CV_BASE_URL`, `CV_URL_IS_DEFAULT`, `HALT_CHANNEL`, `HALT_WINDOW`, `haltBindsFleet`, `forumClaim`, `runnerHeartbeat`, `taskClaim`, `taskStart`, `taskProgress`, `taskRelease`). Among the programs that import this module, `isLiveHalt`, `kbCheck`, `subGate`, `subIntegrate`, `subRevert`, `subBlindGates` and `taskChain` currently have no caller at all; they are available to scripts.
 

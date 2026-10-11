@@ -112,6 +112,7 @@ config :claudiverse_server, ClaudiverseServer.Sessions.ZombieSweep, idle_ms: :ti
 | `:inbox_stale_ms` | `120_000` | `Sessions.Room` | For a seat that also has a sidecar: when its last inbox poll is older than this and no poll is open, prompts queued for the inbox are handed to the sidecar instead. |
 | `:inbox_max_wait_s` | `60` | `InboxController` | Upper bound on an inbox long-poll's `wait` (the default `wait` is 50 s). |
 | `ClaudiverseServer.Sessions.ZombieSweep` | `[enabled: true, first_run_ms: 10 min, every_ms: 10 min, idle_ms: 30 min]` | `ZombieSweep` | Keyword list. `enabled: false` stops the sweeper starting (test config does this). |
+| `ClaudiverseServer.Schedules.Scheduler` | `[enabled: true]` | `Schedules.Scheduler` | `enabled: false` stops its ticks (test config does this; tests call `Scheduler.tick/1`). See [schedules.md](schedules.md). |
 
 ### Questions and permission relays
 
