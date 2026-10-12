@@ -17,7 +17,9 @@ export interface Session {
   type: "sidecar" | "spawned";
   mode: "json" | "pty";
   status: "running" | "stopped" | "crashed";
-  model: string;
+  /** What the seat runs: from its replies, or its profile's model before the
+   *  first one. null when nothing has said yet; never a guessed default. */
+  model: string | null;
   working_directory: string | null;
   inserted_at: string;
   /**

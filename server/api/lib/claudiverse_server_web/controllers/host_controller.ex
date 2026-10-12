@@ -2,11 +2,16 @@ defmodule ClaudiverseServerWeb.HostController do
   @moduledoc """
   "New seat" from the operator's app (see Hosts).
 
-  - `GET /api/hosts` — machines: online agents plus hosts running seats.
+  - `GET /api/hosts` — machines: online agents, hosts running seats, and
+    every machine an agent has joined as, with `last_seen_at` (its agent's
+    last join or leave) and `spawn`, what a spawn may ask for there (nil
+    from an agent older than 0.13).
   - `GET /api/hosts/:host/recent_dirs` — past seats' working directories.
   - `GET /api/hosts/:host/ls?path=` — subfolders, answered by the agent.
   - `POST /api/hosts/:host/spawn` — APP TOKEN ONLY: start a seat; 202
-    {spawn_id}, outcome as "host_spawn" on operator:events.
+    {spawn_id}, outcome as "host_spawn" on operator:events. {path, title,
+    mode, prompt}, and where the machine's `spawn` offers them, `model` and
+    `pooled`; asking a machine whose agent can't apply them is 409.
   - `POST /api/sessions/:id/stop` — APP TOKEN ONLY: the seat's machine closes
     its tmux session (the conversation stays on disk).
   - `POST /api/sessions/:id/resume` — APP TOKEN ONLY: start a stopped seat
@@ -41,11 +46,14 @@ defmodule ClaudiverseServerWeb.HostController do
   # What Shift+Tab reaches on a normal seat; never bypassPermissions/dontAsk.
   @modes ~w(default acceptEdits plan auto)
   @title ~r/\A[A-Za-z0-9._-]{1,64}\z/
+  # As the agent checks it: a model id or alias, with a [1m] suffix.
+  @model ~r/\A[A-Za-z0-9._:\[\]-]{1,100}\z/
   @max_prompt 20_000
 
   def index(conn, _params) do
     user_id = conn.assigns.current_user.id
     online = Map.new(Hosts.online(user_id))
+    seen = Hosts.machines(user_id)
 
     running =
       from(s in Session,
@@ -57,7 +65,7 @@ defmodule ClaudiverseServerWeb.HostController do
       |> Map.new()
 
     hosts =
-      (Map.keys(online) ++ Map.keys(running))
+      (Map.keys(online) ++ Map.keys(running) ++ Map.keys(seen))
       |> Enum.uniq()
       |> Enum.sort()
       |> Enum.map(fn name ->
@@ -71,7 +79,9 @@ defmodule ClaudiverseServerWeb.HostController do
           # than start_profile.
           modes: get_in(online, [name, :modes]) || [],
           runtimes: get_in(online, [name, :runtimes]) || [],
-          mcp: get_in(online, [name, :mcp]) || []}
+          mcp: get_in(online, [name, :mcp]) || [],
+          spawn: get_in(online, [name, :spawn]),
+          last_seen_at: Map.get(seen, name)}
       end)
 
     json(conn, %{hosts: hosts})
@@ -112,6 +122,9 @@ defmodule ClaudiverseServerWeb.HostController do
     mode = params["mode"] || "auto"
     title = params["title"]
     prompt = params["prompt"]
+    model = if params["model"] in [nil, ""], do: nil, else: params["model"]
+    pooled = params["pooled"]
+    asked = Enum.reject([model && "model", is_boolean(pooled) && "pooled"], &(&1 in [nil, false]))
 
     cond do
       not Accounts.app_powers?(conn.assigns[:token_context]) ->
@@ -129,8 +142,21 @@ defmodule ClaudiverseServerWeb.HostController do
       not (is_nil(prompt) or (is_binary(prompt) and String.length(prompt) <= @max_prompt)) ->
         conn |> put_status(:bad_request) |> json(%{error: "prompt must be at most #{@max_prompt} characters"})
 
+      not (is_nil(model) or (is_binary(model) and Regex.match?(@model, model))) ->
+        conn |> put_status(:bad_request) |> json(%{error: "model must be a model name, like claude-haiku-4-5 or opus"})
+
+      not (is_nil(pooled) or is_boolean(pooled)) ->
+        conn |> put_status(:bad_request) |> json(%{error: "pooled must be true or false"})
+
+      # An older agent would start the seat without them, silently.
+      (missing = unoffered(conn.assigns.current_user.id, host, asked)) != [] ->
+        conn |> put_status(:conflict)
+        |> json(%{error: "#{host}'s host agent can't set #{Enum.join(missing, " or ")}: update it (run the installer again on #{host})"})
+
       true ->
         args = %{"path" => params["path"], "title" => title, "mode" => mode, "prompt" => prompt}
+        args = if model, do: Map.put(args, "model", model), else: args
+        args = if is_boolean(pooled), do: Map.put(args, "pooled", pooled), else: args
 
         case Hosts.spawn(conn.assigns.current_user.id, host, args) do
           {:ok, spawn_id} -> conn |> put_status(:accepted) |> json(%{spawn_id: spawn_id})
@@ -215,6 +241,17 @@ defmodule ClaudiverseServerWeb.HostController do
 
   # Every seat carries the shared "api" token, so only the app's own token may
   # stop or start seats.
+  # What of `asked` the host's online agent doesn't offer. An offline host
+  # offers nothing to check against: the spawn is 504 anyway.
+  defp unoffered(_user_id, _host, []), do: []
+
+  defp unoffered(user_id, host, asked) do
+    case List.keyfind(Hosts.online(user_id), host, 0) do
+      nil -> []
+      {_, meta} -> asked -- ((meta[:spawn] || %{})[:options] || [])
+    end
+  end
+
   defp app_only(conn, message) do
     if Accounts.app_powers?(conn.assigns[:token_context]),
       do: :ok,

@@ -12,7 +12,8 @@ Design background is in `docs/design/seat-profiles.md`; where it differs from th
 
 - A new machine usually gets its tokens with a **join code**: the web panel's (or an app's) **Add a machine** mints one (`POST /api/join_codes`, app or super token), and the machine's installer redeems it once (`POST /api/join`, no token) for the seat token and host token, the pair `Accounts.connect_machine/2` mints. A code is 8 characters (`XXXX-XXXX`, no look-alike letters), works once, for 15 minutes, and only its sha256 is stored. An unknown, used or expired code gets one answer, and failed redeems are throttled per address like sign-ins. See [the installer](../installers.md).
 - A host token is minted for a machine name with `POST /api/hosts/:host/token`. The token has context `host:<name>` and can do exactly one thing: join the channel `host:<name>`. It is refused on the HTTP API, on `session:*` topics and on `operator:*` topics.
-- The agent joins `host:<name>` and sends what it allows: `roots` (folders it will serve), `version`, `remote_roots`, and, from agents that support profiles, `modes`, `runtimes` and `mcp`. The server stores this as the host's presence record (per user and host name, in a `Registry`). A host is "online" while its channel is joined.
+- The agent joins `host:<name>` and sends what it allows: `roots` (folders it will serve), `version`, `remote_roots`, and, from agents that support profiles, `modes`, `runtimes` and `mcp`; from 0.13, `spawn` `{options, pool_only, pooled}`, what a plain spawn may ask for there (`options` ⊆ `model`, `pooled`; `pool_only` means the machine has no Claude login of its own, so its seats always use the pool; `pooled` is its default). The server stores this as the host's presence record (per user and host name, in a `Registry`). A host is "online" while its channel is joined.
+- Each join and leave is written to the `machines` table (`Hosts.seen/3`: the name and `last_seen_at`) and sent to the operator's apps as `host` on `operator:events`, so the web panel lists a machine that is offline now, and when it was last there. A connection replaced by a newer one of the same machine counts as neither.
 - A second connection for the same host name replaces the first: the old channel is sent `:host_replaced` and stops. If it has not released its registry entry within about 2 seconds, it is killed.
 - On join the server also records the socket's peer address as `ip`. That address is used to place seats that did not report their machine (see "Placement" below).
 - The server asks, the agent answers. `Hosts.request/5` pushes `"request"` `{request_id, op, args}` to the agent and waits for the matching `"reply"`. The agent is the authority on what it allows (roots, modes, limits); the server only checks the shape of a request and who may ask.
@@ -23,7 +24,7 @@ Agent ops the server sends (all inside the `"request"` event):
 | `op` | Sent by | `args` |
 |---|---|---|
 | `ls` | `GET /api/hosts/:host/ls` | `path` |
-| `spawn` | `POST /api/hosts/:host/spawn` | `path`, `title`, `mode`, `prompt` |
+| `spawn` | `POST /api/hosts/:host/spawn` | `path`, `title`, `mode`, `prompt`, and when asked `model`, `pooled` |
 | `resume` | `POST /api/sessions/:id/resume` | `path`, `title`, `mode`, `session_id` |
 | `stop` | `POST /api/sessions/:id/stop`, profile stop | `title` |
 | `add_root`, `remove_root` | `POST`/`DELETE /api/hosts/:host/roots` | `path` |
@@ -259,6 +260,7 @@ Join `operator:events` with an `app` or `super` (or any non-host) token. Host to
 
 | Event | Payload |
 |---|---|
+| `host` | `{"name", "online", "last_seen_at"}`: a machine's agent joined or left. Refetch `GET /api/hosts` for the rest |
 | `host_spawn` | `{"spawn_id", "host", "op": "spawn"\|"resume", "title", "ok", "error", "started_as"}`; for resume also `"session_id"` (the row resumed) and `"resumed_as"` (the row the running seat registered, or null) instead of `started_as`. `error` is `"<code>: <message>"`, `"timeout"` or `"offline"` when `ok` is false |
 | `profile` | `{"op", "profile"}` where `profile` is the profile as `GET /api/profiles` lists it. `op` is one of `created`, `updated`, `deleted` (profile is then only `{id, name}`), `start`, `stopped`, `renamed` |
 
@@ -270,10 +272,10 @@ All under `/api`, Bearer token. "App" means an `app` or `super` token.
 
 | Method and path | Token | Behaviour |
 |---|---|---|
-| `GET /hosts` | any | `{"hosts": [{name, online, seats, roots, remote_roots, version, modes, runtimes, mcp}]}`: online agents plus any host name that has running seats, sorted by name. `seats` counts running non-proxy rows. The last four fields come from the join payload (empty for an offline host or an older agent). |
+| `GET /hosts` | any | `{"hosts": [{name, online, seats, roots, remote_roots, version, modes, runtimes, mcp, spawn, last_seen_at}]}`: online agents, any host name that has running seats, and every machine an agent has joined as, sorted by name. `seats` counts running non-proxy rows. `version` to `spawn` come from the join payload (empty or null for an offline host or an older agent). `last_seen_at` is the agent's last join or leave (null for a machine never seen since the `machines` table exists). |
 | `GET /hosts/:host/recent_dirs` | any | `{"dirs": [{path, last_used_at, seats_running}]}`: up to 20 distinct working directories of this user's past seats on that host, newest first. |
 | `GET /hosts/:host/ls?path=` | any | Relayed to the agent as `ls`; its result is returned as is. 504 `host <h> is offline` or `host <h> did not answer`; agent refusals as above. |
-| `POST /hosts/:host/spawn` | app | Body `path` (required, non-empty), `title` (optional, `A-Za-z0-9._-`, 1-64), `mode` (default `auto`; one of `default`, `acceptEdits`, `plan`, `auto`), `prompt` (optional, at most 20 000 characters). 202 `{"spawn_id"}`. 400 on a bad field, 403 `spawning seats is app-only`, 429 `one spawn per 10 s per host`, 504 if the host is offline. |
+| `POST /hosts/:host/spawn` | app | Body `path` (required, non-empty), `title` (optional, `A-Za-z0-9._-`, 1-64), `mode` (default `auto`; one of `default`, `acceptEdits`, `plan`, `auto`), `prompt` (optional, at most 20 000 characters), `model` (optional: a model id or alias, e.g. `claude-haiku-4-5` or `opus`; the new seat's row shows it until its first reply), `pooled` (optional boolean: use the server's account pool; a pool-only machine always does). 202 `{"spawn_id"}`. 400 on a bad field, 403 `spawning seats is app-only`, 409 when `model` or `pooled` is asked of a machine whose agent doesn't offer it (older than 0.13: update it), 429 `one spawn per 10 s per host`, 504 if the host is offline. |
 | `POST /sessions/:id/stop` | app | Asks the seat's machine to close its tmux session (`stop`, by the seat's title). On success the room is ended and the answer is `{"ok": true, "host", "title"}`. |
 | `POST /sessions/:id/resume` | app | Optional body `title`, `mode`. Restarts a stopped seat with `claude --resume`. 202 `{"spawn_id"}`; the outcome is `host_spawn` with `op: "resume"`. The session id used is the row's `conversation_id`, else its `claude_session_id`; the mode defaults to the seat's last mode if it is one of the four, else `auto` (so a seat that ran in `bypassPermissions` resumes in `auto`). Shares the spawn rate limit. |
 | `POST /hosts/:host/token` | super | Mints a host token for the name (`A-Za-z0-9._-`, 1-128). 201 `{"name", "token"}`; 400 on a bad name. Put the token in the agent's config. |

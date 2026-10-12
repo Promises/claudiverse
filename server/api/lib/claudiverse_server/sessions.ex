@@ -178,7 +178,9 @@ defmodule ClaudiverseServer.Sessions do
     claude_session_id, so this is what resuming it again needs;
   - for a profile start, `known` also carries origin "profile", the
     profile id and revision and the tmux session, filled where unset (the
-    patched runtime does not report them; the mod does).
+    patched runtime does not report them; the mod does);
+  - `model`, the model the seat was started with, where the row has none
+    yet: until its first reply, nothing else says what it runs.
   A row that already reports a DIFFERENT host is not this seat. "Registered
   since" is inserted OR updated since: a resumed seat re-registers on its
   existing row (same Claude session id), whose inserted_at is old — MEASURED
@@ -204,7 +206,7 @@ defmodule ClaudiverseServer.Sessions do
         changes =
           fill.(:host, host) ++ fill.(:origin, known[:origin] || "spawn") ++ fill.(:working_directory, known[:working_directory]) ++
             fill.(:profile_id, known[:profile_id]) ++ fill.(:profile_revision, known[:profile_revision]) ++
-            fill.(:tmux_session, known[:tmux_session]) ++
+            fill.(:tmux_session, known[:tmux_session]) ++ fill.(:model, known[:model]) ++
             if(known[:conversation_id], do: [conversation_id: known[:conversation_id]], else: [])
 
         session |> Ecto.Changeset.change(changes) |> Repo.update()
@@ -240,6 +242,7 @@ defmodule ClaudiverseServer.Sessions do
       nil ->
         %Session{}
         |> Session.changeset(attrs)
+        |> unknown_model()
         |> Repo.insert()
 
       %Session{} = existing ->
@@ -304,6 +307,14 @@ defmodule ClaudiverseServer.Sessions do
   end
 
   def place_on_host(session, _host), do: session
+
+  # A row with no model says so. Ecto leaves a nil field out of the INSERT,
+  # so the column's own default ("sonnet", from the first migration; SQLite
+  # can't drop a default without rebuilding the table) would fill it in.
+  # MEASURED: the struct read nil while the stored row read "sonnet".
+  defp unknown_model(changeset) do
+    if Ecto.Changeset.get_change(changeset, :model), do: changeset, else: Ecto.Changeset.force_change(changeset, :model, nil)
+  end
 
   def update_session(%Session{} = session, attrs) do
     session

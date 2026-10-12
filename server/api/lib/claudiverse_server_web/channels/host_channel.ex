@@ -9,6 +9,8 @@ defmodule ClaudiverseServerWeb.HostChannel do
   desktop; the agent enforces it, this only lets the app show the option),
   and from agents with `start_profile`: "modes" [mode], "runtimes" [%{"name",
   "version"}], "mcp" [catalog name] — the choices a profile may make there.
+  From 0.13: "spawn" %{"options" [model|pooled], "pool_only", "pooled"},
+  what a plain spawn may ask for there (nil from an older agent).
   Server -> agent: "request" %{"request_id", "op", "args"}.
   Agent -> server: "reply" %{"request_id", "ok", "result" | "code", "error"}.
   """
@@ -31,10 +33,12 @@ defmodule ClaudiverseServerWeb.HostChannel do
         modes: for(m <- List.wrap(params["modes"]), is_binary(m), do: m),
         runtimes: for(%{"name" => n} = r <- List.wrap(params["runtimes"]), is_binary(n), do: %{name: n, version: r["version"]}),
         mcp: for(m <- List.wrap(params["mcp"]), is_binary(m), do: m),
+        spawn: spawn_choices(params["spawn"]),
         ip: socket.assigns[:peer_ip]
       }
 
       :ok = Hosts.register(socket.assigns.current_user.id, name, meta)
+      Hosts.seen(socket.assigns.current_user.id, name, true)
       Hosts.place_waiting(socket.assigns.current_user.id, meta.ip)
       # After the join completes, so the agent can be asked to start seats.
       send(self(), :autostart)
@@ -94,7 +98,25 @@ defmodule ClaudiverseServerWeb.HostChannel do
   end
 
   # A newer connection for this host took over.
-  def handle_info(:host_replaced, socket), do: {:stop, :normal, socket}
+  def handle_info(:host_replaced, socket), do: {:stop, :normal, assign(socket, :replaced, true)}
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  # The agent left: when it was last here. Not when a newer connection of the
+  # same machine replaced this one: that one is online.
+  @impl true
+  def terminate(_reason, socket) do
+    if socket.assigns[:host_name] && !socket.assigns[:replaced] do
+      Hosts.seen(socket.assigns.current_user.id, socket.assigns.host_name, false)
+    end
+
+    :ok
+  end
+
+  @spawn_options ~w(model pooled)
+  defp spawn_choices(%{"options" => options} = s) when is_list(options) do
+    %{options: Enum.filter(options, &(&1 in @spawn_options)), pool_only: s["pool_only"] == true, pooled: s["pooled"] == true}
+  end
+
+  defp spawn_choices(_), do: nil
 end

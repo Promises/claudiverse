@@ -1,0 +1,84 @@
+.panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: var(--surface);
+}
+
+.heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.dotOnline {
+  background: var(--success);
+}
+
+.dotOffline {
+  background: var(--track);
+  border: 1px solid var(--text-muted);
+}
+
+.name {
+  font-weight: 600;
+  color: var(--text-heading);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.online {
+  color: var(--ok-fg);
+}
+
+.meta {
+  color: var(--text-muted);
+}
+
+.startBtn {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.startBtn:hover {
+  background: var(--accent-light);
+}
+
+.startBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

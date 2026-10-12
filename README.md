@@ -13,6 +13,10 @@ On the machine that will host the server (Linux or macOS), run:
 curl -fsSL https://raw.githubusercontent.com/Promises/claudiverse/main/install/install.sh | sh
 ```
 
+It needs `curl`, which cloud images have; a minimal image may not
+(`sudo apt-get install -y curl` on Debian and Ubuntu, `sudo dnf install -y curl`
+on Fedora and RHEL, `sudo apk add curl` on Alpine).
+
 It asks what to do and where, shows a summary, and asks before it acts. Choose
 **Set up a Claudiverse server**, and say yes to setting up a machine for seats:
 
@@ -25,7 +29,8 @@ It asks what to do and where, shows a summary, and asks before it acts. Choose
    Claude accounts under **Accounts** so seats can answer.
 
 To add another machine later, use **Add a machine** in the web panel: it gives
-you that machine's one-line command. Run the installer again to update.
+you that machine's one-line command. **Start a seat** starts a seat on any
+online machine. Run the installer again to update.
 
 Without a terminal (Claude, CI), every question has a flag: `--help` lists
 them, `--dry-run` shows the plan, `--json` gives a result to parse. See the

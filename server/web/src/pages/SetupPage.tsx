@@ -87,7 +87,8 @@ export default function SetupPage() {
               required
             />
             <span className={styles.hint}>
-              It is in the server's log: <code>docker compose -f compose.yml logs server</code>
+              The installer printed it under &ldquo;The server is up&rdquo;. To see it again, on the server:{" "}
+              <code>cd ~/claudiverse &amp;&amp; docker compose -f compose.yml logs server | grep -A3 &apos;setup code&apos;</code>
             </span>
           </label>
 

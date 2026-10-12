@@ -189,7 +189,7 @@ defmodule ClaudiverseServer.Profiles do
       args = if opts[:resume], do: Map.merge(args, %{"resume" => opts[:resume], "resume_policy" => "latest"}), else: args
 
       known = %{origin: "profile", working_directory: p.folder, profile_id: p.id,
-                profile_revision: p.revision, tmux_session: p.name, conversation_id: args["resume"]}
+                profile_revision: p.revision, tmux_session: p.name, model: p.model, conversation_id: args["resume"]}
 
       record_start(user_id, p.id, %{"outcome" => "starting"})
 

@@ -76,8 +76,10 @@
   border: 1px solid var(--border);
   font-family: var(--mono);
   font-size: 12px;
-  white-space: pre-wrap;
-  word-break: break-all;
+  /* One line that scrolls: a break inside the command ("sh -" / "s --")
+     read as two broken commands. */
+  white-space: pre;
+  overflow-x: auto;
   color: var(--text-heading);
 }
 

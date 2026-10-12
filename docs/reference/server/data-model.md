@@ -162,6 +162,19 @@ Purpose: one-time codes a new machine joins with (`JoinCodes`): **Add a machine*
 
 Indexes: unique `(code_hash)`; `(user_id)`.
 
+### `machines`
+
+Purpose: the machines a user's host agents have joined as, and when each was last seen (`Hosts.seen/3`, on every join and leave), so `GET /api/hosts` lists a machine that is offline now. Schema `Hosts.Machine`. Feature page: [profiles-and-hosts.md](profiles-and-hosts.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `name` | string | not null. The host name, as in `host:<name>` |
+| `last_seen_at` | utc_datetime | not null. The agent's last join or leave |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, name)`.
+
 ## Seat profiles
 
 ### `profiles`
@@ -792,6 +805,7 @@ Migrations run automatically at boot in a release: `application.ex` starts `Ecto
 | `20261012060000_add_account_uuid_to_anthropic_auths` | `anthropic_auths.account_uuid` |
 | `20261012090000_profiles_permission_mode_defaults_to_auto` | Rebuilds `profiles` with `permission_mode` defaulting to `"auto"` (SQLite cannot change a column default in place): the same columns, constraints and index, every row copied as it was, the AUTOINCREMENT counter kept. Existing rows keep their mode. |
 | `20261012120000_create_join_codes` | `join_codes` and its indexes |
+| `20261012150000_create_machines` | `machines` and its index |
 
 Notes on running them:
 

@@ -41,9 +41,10 @@ import { createRelay } from "./lib/relay.mjs";
 import { CYCLE, footerMode, dialogOpen } from "./lib/mode.mjs";
 import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession, tmuxNames } from "./lib/adopt.mjs";
 import { realRoots, listDirs, resolveInRoots, checkSpawn, checkResume, checkStopTitle, findTranscript, addRoot, removeRoot, Refusal,
-         machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime } from "./lib/rules.mjs";
+         machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime,
+         spawnChoices, spawnFlags } from "./lib/rules.mjs";
 
-const VERSION = "0.12.0";
+const VERSION = "0.13.0";
 const CONFIG_PATH = process.env.CLAUDIVERSE_HOST_AGENT_CONFIG || path.join(os.homedir(), ".config/claudiverse/host-agent.json");
 
 function log(...a) {
@@ -238,13 +239,12 @@ async function startProfile(args) {
 // and config dir, the folder trusted so no dialog waits); else on `bin`.
 async function startPlain(seat) {
   const rt = SPAWN_RUNTIME;
-  if (!rt) return startSeat(seat);
+  if (!rt) return startSeat({ ...seat, flags: spawnFlags(null, seat) });
   const argv = ["--origin", "spawn"];
   if (cfg.mcp) argv.push("--mcp", cfg.mcp);
   if (rt.configDir) argv.push("--config-dir", rt.configDir);
   if (rt.oauthTokenFile) argv.push("--oauth-token-file", rt.oauthTokenFile);
-  if (rt.poolOnly) argv.push("--pool-only");
-  else if (rt.pooled) argv.push("--pooled");
+  argv.push(...spawnFlags(rt, seat));
   await ensureTrusted(seat.dir, rt.configDir ? path.join(rt.configDir, ".claude.json") : cfg.claude_json);
   return startSeat({ ...seat, bin: rt.bin, extra: argv, configDir: rt.configDir || cfg.claude_config_dir });
 }
@@ -252,7 +252,7 @@ async function startPlain(seat) {
 // spawn, resume and start_profile share everything but the checks and the
 // cv-spawn flags. A profile brings its own binary and flags (`bin`, `extra`)
 // in place of the machine's spawn defaults.
-async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, configDir = cfg.claude_config_dir }) {
+async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, flags = [], configDir = cfg.claude_config_dir }) {
   if (sessionId && !findTranscript(configDir, dir, sessionId))
     throw new Refusal("not_found", `nothing to resume: conversation ${sessionId} does not exist here (a seat that never had a turn has none)`);
 
@@ -269,7 +269,7 @@ async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, conf
   if (extra) {
     argv.push(...extra, "--bin", bin);
   } else {
-    argv.push("--origin", "spawn");
+    argv.push("--origin", "spawn", ...flags);
     if (cfg.mcp) argv.push("--mcp", cfg.mcp);
     if (cfg.bin) argv.push("--bin", cfg.bin);
   }
@@ -570,7 +570,7 @@ function connect() {
     const live = await liveSeats().catch(() => null);
     // A socket that closed or rejoined meanwhile is not this join's.
     if (jr !== joinRef || ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()), ...(live ? { live_seats: live } : {}) }]));
+    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()), spawn: spawnChoices(SPAWN_RUNTIME), ...(live ? { live_seats: live } : {}) }]));
     clearInterval(heartbeat);
     heartbeat = setInterval(() => send("heartbeat", {}, null, "phoenix"), 30_000);
   });

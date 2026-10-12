@@ -97,3 +97,8 @@
   font-weight: 400;
   color: var(--text);
 }
+
+/* A command in a hint wraps rather than widening the card on a phone. */
+.hint code {
+  overflow-wrap: anywhere;
+}

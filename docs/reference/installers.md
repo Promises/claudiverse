@@ -52,7 +52,7 @@ Flags. Every question has one; secrets are environment variables.
 |---|---|---|---|
 | `--server` / `--machine` | both | asked | What to do. Also `--mode server\|machine`. |
 | `--with-seat` | server | asked (yes) | Then make a machine a seat machine of the new server, and start a first seat. |
-| `--target local\|ssh\|context` | both | asked (local) | Where it runs. `context` is for `--server` only. |
+| `--target local\|ssh\|context` | both | asked (local); local with `--join` | Where it runs. `context` is for `--server` only. A join code is made for the machine that runs the command, so with `--join` it is not asked. |
 | `--ssh USER@HOST` | both | | The remote machine for `--target ssh`, or the seat machine for `--seat-target ssh`. |
 | `--port N` | both | 22 | Its SSH port. |
 | `--identity FILE` | both | your ssh config | The SSH key. |
@@ -169,6 +169,7 @@ curl -fsSL https://raw.githubusercontent.com/Promises/claudiverse/main/install/i
 | `<dir> has local changes` | An update never overwrites edits: commit or stash them. |
 | The agent did not come online | Its log: `journalctl --user -u claudiverse-host-agent`, `~/Library/Logs/claudiverse-host-agent.log`, or `/var/log/claudiverse-host-agent-<user>.log` (OpenRC). |
 | `added <user> to the docker group` | Log out and in again, or `newgrp docker`, to use docker without sudo. |
+| `docker compose up failed; its whole log is …/build.log` | The build's output is kept in `~/.local/state/claudiverse/build.log` (or under `$XDG_STATE_HOME`), not shown while it runs; the failure shows its last lines. |
 
 ## Related pages
 

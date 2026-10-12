@@ -286,14 +286,25 @@ APT_UPDATED=
 pkg_install() {
   case $OS_FAMILY in
     debian)
-      [ -n "$APT_UPDATED" ] || { $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update -qq; APT_UPDATED=1; }
-      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null ;;
+      # apt's output is shown only when it fails: on success it is noise
+      # ("debconf: delaying package configuration" on every minimal image).
+      tmp APTLOG
+      if [ -z "$APT_UPDATED" ]; then
+        $SUDO env DEBIAN_FRONTEND=noninteractive apt-get update -qq >"$APTLOG" 2>&1 \
+          || { cat "$APTLOG" >&2; die "$EX_STEP" "apt-get update failed"; }
+        APT_UPDATED=1
+      fi
+      $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >"$APTLOG" 2>&1 \
+        || { cat "$APTLOG" >&2; die "$EX_STEP" "apt-get could not install $*"; } ;;
     arch) $SUDO pacman -Sy --noconfirm --needed "$@" >/dev/null ;;
     alpine) $SUDO apk add --no-cache -q "$@" ;;
     fedora|rhel) $SUDO dnf install -y -q "$@" >/dev/null ;;
     macos) brew install "$@" ;;
   esac
 }
+
+# Where packages come from, in the plan: the distribution's own name.
+pkg_source() { case $OS_FAMILY in macos) echo Homebrew ;; *) echo "${OS_ID:-$OS_FAMILY} packages" ;; esac; }
 
 # fetch URL FILE
 fetch() { curl -fsSL --retry 3 "$1" -o "$2" || die "$EX_STEP" "could not download $1"; }
@@ -471,7 +482,7 @@ server_flow() {
   if [ -n "$NEED_DOCKER$NEED_GIT$NEED_CURL" ] && [ -n "$NO_INSTALL" ]; then
     die "$EX_UNSUPPORTED" "missing:${NEED_DOCKER:+ docker (with the compose plugin)}${NEED_GIT:+ git}${NEED_CURL:+ curl} (and --no-install)"
   fi
-  [ -z "$NEED_GIT$NEED_CURL" ] || plan "install${NEED_GIT:+ git}${NEED_CURL:+ curl} ($OS_FAMILY packages)"
+  [ -z "$NEED_GIT$NEED_CURL" ] || plan "install${NEED_GIT:+ git}${NEED_CURL:+ curl} ($(pkg_source))"
   if [ -n "$NEED_DOCKER" ]; then
     case $OS_FAMILY in
       debian) plan "install Docker from Docker's own repository (docker-ce and the compose plugin)" ;;
@@ -574,8 +585,27 @@ server_act() {
   fi
 
   step "build and start the server (the first build takes a few minutes)"
-  ( cd "$DIR" && $DOCKER compose -p "$PROJECT" -f compose.yml --env-file .env up -d --build ) >&2 \
-    || die "$EX_STEP" "docker compose up failed (see the output above)"
+  # The build's output goes to a log, not the screen: on a terminal one line
+  # shows the time and the step it is on; on failure the log's end is shown
+  # with its path. Outside the clone, so it never dirties it.
+  BUILD_LOG=${XDG_STATE_HOME:-$HOME/.local/state}/claudiverse/build.log
+  mkdir -p "$(dirname "$BUILD_LOG")"
+  ( cd "$DIR" && $DOCKER compose -p "$PROJECT" -f compose.yml --env-file .env up -d --build ) >"$BUILD_LOG" 2>&1 </dev/null &
+  _pid=$! _s=0
+  while kill -0 "$_pid" 2>/dev/null; do
+    if [ -n "$INTERACTIVE" ]; then
+      _l=$(grep -E '^#[0-9]+ \[' "$BUILD_LOG" 2>/dev/null | tail -1 | sed 's/^#[0-9]* //' | cut -c1-80)
+      printf '\r\033[K  %ss  %s' "$_s" "$_l" >/dev/tty
+    fi
+    sleep 1; _s=$((_s + 1))
+  done
+  [ -z "$INTERACTIVE" ] || printf '\r\033[K' >/dev/tty
+  if wait "$_pid"; then
+    say "  built and started in ${_s}s (the build's log: $BUILD_LOG)"
+  else
+    tail -n 25 "$BUILD_LOG" >&2
+    die "$EX_STEP" "docker compose up failed; its whole log is $BUILD_LOG"
+  fi
 
   step "wait for the API"
   _base="http://127.0.0.1:$API_PORT"
@@ -616,8 +646,12 @@ server_act() {
   if [ "$SET_UP" = true ]; then
     say "  It already has an account: sign in there."
   elif [ -n "$SETUP_CODE" ]; then
-    say "  SETUP CODE: $SETUP_CODE"
-    [ -n "$WITH_SEAT" ] || say "  Open the web panel, create your account with the setup code, then use Add a machine for each machine that runs Claude Code."
+    if [ -n "$WITH_SEAT" ]; then
+      say "  Setup code:  $SETUP_CODE (used next to create your account: nothing to copy)"
+    else
+      say "  SETUP CODE: $SETUP_CODE"
+      say "  Open the web panel and create your account with this setup code, then use Add a machine for each machine that runs Claude Code."
+    fi
   else
     say "  No setup code in the log yet: docker compose -p $PROJECT logs server | grep -A3 'setup code'"
   fi
@@ -662,6 +696,20 @@ mint_join() {
 # --- a machine that runs seats ------------------------------------------------------------
 CONF_DIR='' CONF=''
 node_major() { node -v 2>/dev/null | sed -n 's/^v\([0-9]*\).*/\1/p'; }
+
+# host_online HOSTS_JSON NAME: whether GET /api/hosts lists NAME online. Parsed
+# by node, which this machine has by then: a grep for "name" and "online" in
+# one object broke when a host gained a nested object between them (the
+# server's key order is not fixed).
+host_online() {
+  printf '%s' "$1" | node -e '
+    let s = "";
+    process.stdin.on("data", (d) => (s += d)).on("end", () => {
+      let hosts = [];
+      try { hosts = JSON.parse(s).hosts || []; } catch {}
+      process.exit(hosts.some((h) => h.name === process.argv[1] && h.online === true) ? 0 : 1);
+    });' "$2"
+}
 
 machine_flow() {
   step "check the system"
@@ -715,7 +763,7 @@ machine_flow() {
     die "$EX_UNSUPPORTED" "missing:$PKGS${NEED_NODE:+ node 22+}${NEED_CLAUDE:+ claude}${NEED_BREW:+ brew} (and --no-install)"
   fi
   [ -z "$NEED_BREW" ] || plan "install Homebrew (its official installer; it asks for your password)"
-  [ -z "$PKGS" ] || plan "install$PKGS ($OS_FAMILY packages)"
+  [ -z "$PKGS" ] || plan "install$PKGS ($(pkg_source))"
   if [ -n "$NEED_NODE" ]; then
     case $OS_FAMILY in
       macos) plan "install node (Homebrew)" ;;
@@ -886,7 +934,7 @@ machine_act() {
   _online=
   for _i in $(seq 1 30); do
     api GET /api/hosts "" "$SEAT_TOKEN"
-    if printf '%s' "$API_BODY" | tr '{' '\n' | grep "\"name\":\"$NAME\"" | grep -q '"online":true'; then _online=1; break; fi
+    if host_online "$API_BODY" "$NAME"; then _online=1; break; fi
     sleep 2
   done
   [ -n "$_online" ] || die "$EX_STEP" "the host agent did not come online at $URL within a minute; see its log (journalctl --user -u ${SERVICE_LABEL:-claudiverse-host-agent}, or ~/Library/Logs)"
@@ -917,8 +965,9 @@ first_seat() {
   case $API_STATUS in 202) ;; *) say "  could not start it: $(api_error). Start one from the apps' New seat, or with the agent's spawn."; json_set seat null; return 0 ;; esac
   _seen=
   for _i in $(seq 1 45); do
-    api GET "/api/sessions?limit=20" "" "$APP_TOKEN"
-    if printf '%s' "$API_BODY" | tr '{' '\n' | grep '"title":"hello"' | grep -q '"status":"running"'; then _seen=1; break; fi
+    # The server filters: only running seats titled hello, so any row is it.
+    api GET "/api/sessions?title=hello" "" "$APP_TOKEN"
+    case $API_BODY in *'"title":"hello"'*) _seen=1; break ;; esac
     sleep 2
   done
   json_set seat "$(json_str hello)"
@@ -928,7 +977,6 @@ first_seat() {
   else
     say "The seat hello was started; it has not shown up in the server yet (see the web panel in a minute)."
   fi
-  say "Add your Claude accounts under Accounts in the web panel so seats can answer."
 }
 
 # --- main ------------------------------------------------------------------------------------
@@ -952,6 +1000,8 @@ case $MODE in server|machine) ;; *) die "$EX_USAGE" "--mode is server or machine
 json_set mode "$(json_str "$MODE")"
 [ "$MODE" = server ] || [ -z "$WITH_SEAT" ] || die "$EX_USAGE" "--with-seat goes with --server"
 
+# A join code was made for the machine that runs the command: no question.
+if [ "$MODE" = machine ] && [ -n "$JOIN" ] && [ -z "$TARGET" ]; then TARGET=local; fi
 if [ -z "$TARGET" ] && [ -n "$INTERACTIVE" ]; then
   if [ "$MODE" = server ]; then
     printf '\nWhere should the server run?\n  1) this machine\n  2) another machine, over SSH\n  3) an existing Docker context\n' >/dev/tty
@@ -978,6 +1028,7 @@ if [ "$MODE" = machine ]; then
   machine_flow
   confirm
   machine_act
+  say "Next: in the web panel, Start a seat on $NAME."
   json_out true 0
   exit 0
 fi
@@ -1030,4 +1081,7 @@ fi
 URL=$LOCAL_API
 first_seat
 signout
+say ""
+say "Done. Open the web panel: $WEB_URL"
+say "  Sign in as $EMAIL. Add your Claude accounts under Accounts, so seats can answer."
 json_out true 0

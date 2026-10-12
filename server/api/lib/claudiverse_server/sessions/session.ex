@@ -10,7 +10,10 @@ defmodule ClaudiverseServer.Sessions.Session do
     field :mode, Ecto.Enum, values: [:json, :pty], default: :json
     field :status, Ecto.Enum, values: [:running, :stopped, :crashed], default: :running
     field :working_directory, :string
-    field :model, :string, default: "sonnet"
+    # What the seat runs, from its replies (Room) or, before the first, its
+    # profile's model. No default: a "sonnet" default was shown as every new
+    # seat's model, a Haiku one's included.
+    field :model, :string
     field :permission_mode, :string, default: "default"
     # Claude Code's own session UUID, reported by the sidecar. Stable across
     # reconnects, so the server can REUSE this row on a blip instead of

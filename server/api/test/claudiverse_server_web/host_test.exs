@@ -36,6 +36,14 @@ defmodule ClaudiverseServerWeb.HostTest do
     chan
   end
 
+  # An agent that says what its plain spawn offers (0.13+).
+  @spawn %{"options" => ["model", "pooled"], "pool_only" => true, "pooled" => true}
+  defp agent_offering!(ctx, spawn \\ @spawn) do
+    {:ok, socket} = Phoenix.ChannelTest.connect(UserSocket, %{"token" => ctx.host})
+    {:ok, _, chan} = subscribe_and_join(socket, HostChannel, "host:m5", %{"roots" => ["/srv/projects"], "version" => "0.13.0", "spawn" => spawn})
+    chan
+  end
+
   defp as(token), do: build_conn() |> put_req_header("authorization", "Bearer " <> token)
   defp async(fun), do: Task.async(fun)
 
@@ -72,6 +80,75 @@ defmodule ClaudiverseServerWeb.HostTest do
     hosts = as(ctx.api) |> get("/api/hosts") |> json_response(200) |> Map.fetch!("hosts")
     assert %{"name" => "m1", "online" => false, "seats" => 1} = Enum.find(hosts, &(&1["name"] == "m1"))
     assert %{"name" => "m5", "online" => true, "seats" => 1, "roots" => ["/srv/projects"]} = Enum.find(hosts, &(&1["name"] == "m5"))
+  end
+
+  test "hosts lists a machine seen before that is offline now, and when it was last seen", ctx do
+    chan = agent!(ctx)
+    Process.unlink(chan.channel_pid)
+    close(chan)
+
+    hosts = as(ctx.app) |> get("/api/hosts") |> json_response(200) |> Map.fetch!("hosts")
+    assert %{"online" => false, "seats" => 0, "last_seen_at" => seen} = Enum.find(hosts, &(&1["name"] == "m5"))
+    assert {:ok, at, 0} = DateTime.from_iso8601(seen)
+    assert DateTime.diff(DateTime.utc_now(), at) < 5
+  end
+
+  test "an agent coming online and going offline is announced as host on operator:events", ctx do
+    Phoenix.PubSub.subscribe(ClaudiverseServer.PubSub, Hosts.events_topic(ctx.user.id))
+    chan = agent!(ctx)
+    assert_receive {"host", %{"name" => "m5", "online" => true}}, 1_000
+    Process.unlink(chan.channel_pid)
+    close(chan)
+    assert_receive {"host", %{"name" => "m5", "online" => false, "last_seen_at" => %DateTime{}}}, 1_000
+  end
+
+  test "the operator's apps are told on operator:events when a machine comes online", ctx do
+    {:ok, socket} = Phoenix.ChannelTest.connect(UserSocket, %{"token" => ctx.app})
+    {:ok, _, _} = subscribe_and_join(socket, ClaudiverseServerWeb.OperatorChannel, "operator:events", %{})
+    agent!(ctx)
+    assert_push "host", %{"name" => "m5", "online" => true}
+  end
+
+  test "hosts says what each machine's spawn offers; an older agent offers nothing", ctx do
+    agent_offering!(ctx)
+    hosts = as(ctx.app) |> get("/api/hosts") |> json_response(200) |> Map.fetch!("hosts")
+    assert %{"spawn" => %{"options" => ["model", "pooled"], "pool_only" => true, "pooled" => true}} = Enum.find(hosts, &(&1["name"] == "m5"))
+
+    {:ok, m1} = Accounts.create_host_token(ctx.user, "m1")
+    {:ok, socket} = Phoenix.ChannelTest.connect(UserSocket, %{"token" => m1})
+    {:ok, _, _} = subscribe_and_join(socket, HostChannel, "host:m1", %{"roots" => [], "version" => "0.12.0"})
+    hosts = as(ctx.app) |> get("/api/hosts") |> json_response(200) |> Map.fetch!("hosts")
+    assert %{"spawn" => nil} = Enum.find(hosts, &(&1["name"] == "m1"))
+  end
+
+  test "spawn passes a model and pooling on; the model is the new seat's until it replies", ctx do
+    chan = agent_offering!(ctx)
+    Phoenix.PubSub.subscribe(ClaudiverseServer.PubSub, Hosts.events_topic(ctx.user.id))
+    as(ctx.app) |> post("/api/hosts/m5/spawn", %{path: "/srv/projects/a", title: "quick", model: "claude-haiku-4-5", pooled: false})
+    |> json_response(202)
+
+    assert_push "request", %{"request_id" => rid, "op" => "spawn", "args" => %{"model" => "claude-haiku-4-5", "pooled" => false}}
+    bare = session_fixture(ctx.user, %{title: "quick"})
+    Phoenix.ChannelTest.push(chan, "reply", %{"request_id" => rid, "ok" => true, "result" => %{"title" => "quick"}})
+    assert_receive {"host_spawn", %{"ok" => true}}, 3_000
+    assert %{model: "claude-haiku-4-5"} = ClaudiverseServer.Repo.reload!(bare)
+  end
+
+  test "spawn refuses a bad model or pooling, and a model the machine's agent can't apply", ctx do
+    agent_offering!(ctx)
+
+    for body <- [%{path: "/srv/projects/a", model: "haiku; rm -rf /"}, %{path: "/srv/projects/a", pooled: "yes"}] do
+      assert as(ctx.app) |> post("/api/hosts/m5/spawn", body) |> json_response(400), inspect(body)
+    end
+
+    refute_push "request", _
+
+    {:ok, m1} = Accounts.create_host_token(ctx.user, "m1")
+    {:ok, socket} = Phoenix.ChannelTest.connect(UserSocket, %{"token" => m1})
+    {:ok, _, _} = subscribe_and_join(socket, HostChannel, "host:m1", %{"roots" => ["/srv"], "version" => "0.12.0"})
+    assert %{"error" => error} = as(ctx.app) |> post("/api/hosts/m1/spawn", %{path: "/srv/a", model: "claude-haiku-4-5"}) |> json_response(409)
+    assert error =~ "update"
+    refute_push "request", _
   end
 
   test "recent_dirs lists a host's past working directories", ctx do

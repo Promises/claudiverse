@@ -139,14 +139,12 @@ export default function SessionPage() {
           )}
           <span className={styles.meta}>
             {/*
-              ⛔ session.model IS NOT REPORTED BY THE CLIENT. The sidecar never
-              sends it, so the server's "sonnet" default was shown for every
-              seat — including Opus ones, confirmed side by side against a
-              terminal reading "Opus 5 (1M context)". A wrong value that looks
-              like a real one is worse than no value, so it is omitted until
-              something actually reports it.
+              Where the seat runs, in words a person uses. It used to show
+              session.type ("sidecar"), which is how the server tracks the
+              row, not something a newcomer can read. The model is in the
+              Model menu below.
             */}
-            {session.type}
+            {[session.host && `on ${session.host}`, session.working_directory].filter(Boolean).join(" · ")}
           </span>
         </div>
         <div className={styles.status}>
@@ -247,7 +245,7 @@ export default function SessionPage() {
             {/* An id we cannot map is SHOWN, not hidden — the control must not
                 claim a model the seat is not running. */}
             {!modelAlias(runningModel) && (
-              <option value="">{runningModel || "unknown"}</option>
+              <option value="">{runningModel || "Unknown until it replies"}</option>
             )}
             {MODEL_CHOICES.map((m) => (
               <option key={m.id} value={m.id}>

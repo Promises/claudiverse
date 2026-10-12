@@ -1,6 +1,6 @@
 # Dashboard
 
-The dashboard is the web panel's home page (route `/`, after login). It lists your seats, one row each, with a live activity dot, so you can see at a glance which seats are working, which are waiting for you, and which are not connected, and open one to watch or steer it. It also deletes a seat's record.
+The dashboard is the web panel's home page (route `/`, after login). It lists your seats, one row each, with a live activity dot, so you can see at a glance which seats are working, which are waiting for you, and which are not connected, and open one to watch or steer it. It also lists your machines, adds a machine, starts a seat on one, and deletes a seat's record.
 
 ## How it works
 
@@ -8,7 +8,7 @@ The page calls `GET /api/sessions` when it opens and again every 5 seconds. A fa
 
 An empty list shows:
 
-> No seats yet. Set up a machine and start one: see the setup guide, docs/guide.
+> No seats yet. Add a machine, then Start a seat.
 
 Clicking anywhere on a row except the delete button navigates to `/sessions/:id` (see [seat-view.md](seat-view.md)).
 
@@ -55,7 +55,7 @@ Confirmed in `SessionController.index` and `Sessions.list_sessions`:
 | Title | `title`, the addressable name. |
 | Status badge | `running`, `stopped`, or `crashed`. Any value other than `running` or `stopped` is styled as crashed. |
 | Display title | `display_title` is shown under the title only when it is set and differs from `title`. It is Claude Code's own session-picker name, derived from the conversation; it changes as the session evolves and two sessions can share one. The `title` (kebab case, unique per live seat) is the address that tools such as `cv_send` and `?title=` resolve, which is why it stays the primary label and `display_title` is only an aid for recognition. |
-| Meta line | In order, each only if present: fleet (`fleet`), model (`model`, always rendered), `on <host>`, `working_directory`, and the time. |
+| Meta line | In order, each only if present: fleet (`fleet`), model (`model`), `on <host>`, `working_directory`, and the time. |
 | Time | Relative time of `last_activity_at`, falling back to `inserted_at`; hovering shows the absolute time via `toLocaleString()`. |
 | Delete button | The `×` button, tooltip `Delete session`. |
 
@@ -68,6 +68,25 @@ The header shows the Claudiverse logo (`BrandLogo`, decorative, follows the OS l
 ### Add a machine
 
 The `Add a machine` button beside the Seats heading opens a panel (`AddMachine`). It takes an optional machine name and, on `Make the command`, sends `POST /api/join_codes` (`createJoinCode`). It then shows the server's `command` (the one-line installer command with a fresh join code), the code, its machine name and the time it expires, with `Copy` (to the clipboard) and `Done`. The code works once, for 15 minutes; a new one is made each time. A server error is shown under the panel. See [the installer](../../installers.md).
+
+### Machines
+
+Under the toolbar, `Machines` lists every machine from `GET /api/hosts` (`listHosts`): a green dot and `online`, or a hollow dot and `last seen 3h ago` (`last_seen_at`, its agent's last join or leave; `offline` when the server never recorded one), and how many seats run there. An online machine has its own `Start a seat` button, which opens the form on that machine. The list is read when the page opens and again on every `host` event on `operator:events` (`useOperatorEvents`), when a machine's agent joins or leaves. With no machines the section is not shown.
+
+### Start a seat
+
+`Start a seat` in the toolbar (or on a machine) opens a form (`StartSeat`) that starts a seat through `POST /api/hosts/:host/spawn` (`spawnSeat`), the same path as the apps' New seat:
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| Machine | the first online one, or the one it was opened from | Only online machines. With none online the form says so instead. |
+| Folder | the machine's first root | Each root and its subfolders, read from the machine (`GET /api/hosts/:host/ls`). The agent refuses anything outside its roots. |
+| Name | the folder's name, made safe as the agent makes it | 1 to 64 of `A-Z a-z 0-9 . _ -`; checked before asking. |
+| Permission mode | `Auto` | The machine's own `modes` (all four from an older agent): Auto, Ask before acting, Accept edits, Plan only. |
+| Model | the machine's default | Opus, Sonnet or Haiku (`opus`, `sonnet`, `haiku`, which Claude Code resolves). Sent only when chosen. |
+| Use the server's account pool | on | A pool-only machine (no Claude login of its own) is always pooled: checked, fixed, and nothing is sent. |
+
+Model and pool are offered only where the machine's `spawn` lists them (host agent 0.13+); for an older agent they are disabled and the form says to run the installer again on that machine (the server would refuse them, 409). `Start the seat` posts the request; a refusal is shown in the server's words. Once the server takes it (202), the form closes and a line under the toolbar reads `Starting <name> on <machine>…`, then, from the `host_spawn` event for that `spawn_id`, `<name> is running on <machine>.` or `<name> did not start on <machine>: <error>`. A finished line can be dismissed.
 
 ### Deleting a seat
 
@@ -142,11 +161,9 @@ DELETE /api/sessions/12
 - A seat shows no dot: the server reported `unknown`, usually because the seat's Room did not answer within 200 ms (often because it is busy), or the server predates the `activity` field. The next 5-second refresh usually fills it in.
 - A seat you expect is missing: stopped and crashed seats are not listed (default `running` filter), and only 200 rows are returned.
 - A seat disappeared after you clicked `×`: delete has no confirmation. The row and its stored messages are gone; this cannot be undone from the panel.
-- Model looks wrong: see below.
-
-### Model value: the code comments disagree, the server is current
-
-`DashboardPage.tsx` shows `s.model` for every row. A comment in `SessionPage.tsx` says `session.model` "IS NOT REPORTED BY THE CLIENT" and that the server's `sonnet` default was shown for every seat, and so the seat page omits it from its header. The server code has since changed (`Room.note_model` in `server/api/lib/claudiverse_server/sessions/room.ex`): on every mirrored assistant message it reads `message.model` and updates the session row when it differs. So the dashboard value is the model of the seat's latest mirrored assistant message, and is reliable once the seat has produced one assistant message. Before that, the row still holds the create-time default `sonnet` (the `model` column default), and the dashboard shows that default as if it were real. The seat page's comment is out of date with respect to the server, and its model switcher already uses the latest assistant message first and `session.model` only as a fallback.
+- A seat shows no model: nothing has said yet what it runs. The server sets `model` from the seat's latest mirrored assistant message (`Room.note_model`), or, before the first, from the model it was started with (a profile's, or Start a seat's). A seat started with the machine's default shows none until it replies.
+- Start a seat says a machine's agent is older: the model and the pool are its own defaults until its host agent is updated (run the installer again there).
+- A start line stays on `Starting…`: no `host_spawn` arrived, usually because the page lost its socket. The seat list still shows the seat once it registers.
 
 ## Related pages
 
@@ -166,6 +183,11 @@ DELETE /api/sessions/12
 - `server/web/src/pages/DashboardPage.tsx`
 - `server/web/src/pages/DashboardPage.module.css`
 - `server/web/src/api/sessions.ts`
+- `server/web/src/api/hosts.ts`
+- `server/web/src/components/Machines.tsx`
+- `server/web/src/components/StartSeat.tsx`
+- `server/web/src/lib/startSeat.ts`
+- `server/web/src/hooks/useOperatorEvents.ts`
 - `server/web/src/lib/types.ts`
 - `server/web/src/components/BrandLogo.tsx`
 - `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`

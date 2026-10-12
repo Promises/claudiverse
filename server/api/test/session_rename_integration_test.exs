@@ -114,6 +114,22 @@ defmodule ClaudiverseServerWeb.SessionRenameIntegrationTest do
     assert row["display_title"] == "Knights of Ni follow-up phrase"
   end
 
+  test "a seat that has reported no model has none: no default stands in for it", %{conn: conn} do
+    # The panel showed "sonnet" for every new seat, a Haiku one included: the
+    # row's default, not anything the seat said.
+    {_user, token} = user_with_token()
+
+    body =
+      conn
+      |> seat_conn(token, "seat-new", "new-1111-2222-3333-444455556666")
+      |> post(~p"/api/sessions", %{"title" => "seat-new", "claude_session_id" => "new-1111-2222-3333-444455556666"})
+      |> json_response(201)
+
+    # The stored row, not the response: the response echoes the struct, which
+    # read nil while the column's default put "sonnet" in the row.
+    assert %{model: nil} = ClaudiverseServer.Repo.get!(ClaudiverseServer.Sessions.Session, body["session"]["id"])
+  end
+
   test "🔴 a rename must not RESET the model the seat reported", %{conn: conn} do
     # Measured: a session reporting "claude-opus-5" reverted to "sonnet" the
     # moment it was renamed, because create_session took

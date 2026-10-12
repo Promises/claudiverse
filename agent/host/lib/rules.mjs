@@ -119,8 +119,15 @@ export async function checkSpawn(args, roots, ms) {
   if (prompt !== null && (typeof prompt !== "string" || prompt.length > MAX_PROMPT))
     throw new Refusal("bad_request", `prompt must be text of at most ${MAX_PROMPT} characters`);
 
+  // The model and pooling an app may choose (spawnChoices); null is the
+  // machine's default: Claude Code's own model, the runtime's pooling.
+  const model = args.model == null || args.model === "" ? null : args.model;
+  if (model !== null && !(typeof model === "string" && MODEL.test(model))) throw new Refusal("bad_request", "model must be a model name");
+  const pooled = args.pooled ?? null;
+  if (pooled !== null && typeof pooled !== "boolean") throw new Refusal("bad_request", "pooled must be true or false");
+
   const dir = await resolveInRoots(args.path, roots, ms);
-  return { dir, title: title ?? defaultTitle(dir), mode, prompt };
+  return { dir, title: title ?? defaultTitle(dir), mode, prompt, model, pooled };
 }
 
 // Validate a resume request: a spawn (same folder, mode and title rules) plus
@@ -248,6 +255,24 @@ export function spawnRuntime(cfg) {
   // while the pool had another account free.
   return { name, bin: r.bin, configDir: abs(r.config_dir), oauthTokenFile: abs(r.oauth_token_file), poolOnly: r.pool_only === true,
            pooled: cfg.spawn_pooled === true || r.pool_only === true };
+}
+
+// What an app may ask this machine's plain spawn for, sent when the agent
+// joins: the options it understands, and how the spawn runtime pools. A
+// pool-only runtime has no Claude login of its own: its seats always use the
+// server's pool.
+export function spawnChoices(rt) {
+  return { options: ["model", "pooled"], pool_only: rt?.poolOnly === true, pooled: rt?.pooled === true };
+}
+
+// cv-spawn's flags for a plain spawn on runtime `rt` (null: no spawn_runtime):
+// the model asked for, and pooling as asked, else the runtime's default. A
+// pool-only runtime always uses the pool.
+export function spawnFlags(rt, { model, pooled }) {
+  const flags = model ? ["--model", model] : [];
+  if (rt?.poolOnly) flags.push("--pool-only");
+  else if (pooled ?? rt?.pooled ?? false) flags.push("--pooled");
+  return flags;
 }
 
 const posInt = (v) => Number.isInteger(v) && v > 0;

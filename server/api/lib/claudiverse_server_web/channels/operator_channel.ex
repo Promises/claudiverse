@@ -9,6 +9,8 @@ defmodule ClaudiverseServerWeb.OperatorChannel do
 
   `operator:events` — operator-facing events in general:
     "host_spawn"              %{"spawn_id", "host", "title", "ok", "error", "op", ...}
+    "host"                    %{"name", "online", "last_seen_at"}: a machine's
+                              agent joined or left; refetch GET /api/hosts
     "runner"                  one runner slot as GET /api/fleets lists it, on
                               any change of its status, seat or task
     "pool"                    %{"change" => preferred|upgrade|degrade|cooling,
@@ -43,7 +45,7 @@ defmodule ClaudiverseServerWeb.OperatorChannel do
     end
   end
 
-  @events ~w(human_request human_request_resolved host_spawn runner profile pool)
+  @events ~w(human_request human_request_resolved host_spawn host runner profile pool)
 
   @impl true
   def handle_info({event, payload}, socket) when event in @events do

@@ -5,7 +5,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { timed, realRoots, listDirs, checkSpawn, checkResume, checkStopTitle, resolveInRoots, findTranscript, addRoot, removeRoot, defaultTitle, Refusal, MAX_DIRS,
-         machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime } from "../lib/rules.mjs";
+         machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime,
+         spawnChoices, spawnFlags } from "../lib/rules.mjs";
 
 async function tree() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cvha-")));
@@ -70,6 +71,37 @@ test("spawn: path must be inside the roots; title defaults to the folder and is 
   assert.equal((await checkSpawn({ path: path.join(t.root, "app") }, t.roots)).title, "app");
   await refused(() => checkSpawn({ path: path.join(t.root, "app"), title: "x:y" }, t.roots), "bad_request");
   await refused(() => checkSpawn({ path: path.join(t.root, "app"), prompt: "x".repeat(20001) }, t.roots), "bad_request");
+});
+
+test("spawn: a model and pooling may be asked for; anything else is refused", async () => {
+  const t = await tree();
+  const app = path.join(t.root, "app");
+  const plain = await checkSpawn({ path: app }, t.roots);
+  assert.equal(plain.model, null);
+  assert.equal(plain.pooled, null, "not asked: the machine's default");
+  const s = await checkSpawn({ path: app, model: "claude-haiku-4-5", pooled: false }, t.roots);
+  assert.equal(s.model, "claude-haiku-4-5");
+  assert.equal(s.pooled, false);
+  assert.equal((await checkSpawn({ path: app, model: "" }, t.roots)).model, null);
+  for (const model of ["haiku; rm -rf /", "x".repeat(101), 7]) await refused(() => checkSpawn({ path: app, model }, t.roots), "bad_request");
+  for (const pooled of ["yes", 1]) await refused(() => checkSpawn({ path: app, pooled }, t.roots), "bad_request");
+});
+
+test("spawn flags: the model asked for; pooling as asked, but a pool-only runtime always uses the pool", () => {
+  const login = { poolOnly: false, pooled: false };
+  const pool = { poolOnly: true, pooled: true };
+  assert.deepEqual(spawnFlags(login, { model: "claude-haiku-4-5", pooled: true }), ["--model", "claude-haiku-4-5", "--pooled"]);
+  assert.deepEqual(spawnFlags(login, { model: null, pooled: null }), [], "not asked: the runtime's default, here its own login");
+  assert.deepEqual(spawnFlags({ poolOnly: false, pooled: true }, { pooled: null }), ["--pooled"], "spawn_pooled is the default");
+  assert.deepEqual(spawnFlags({ poolOnly: false, pooled: true }, { pooled: false }), [], "asked not to: its own login");
+  assert.deepEqual(spawnFlags(pool, { pooled: false }), ["--pool-only"], "no login of its own: the pool, whatever was asked");
+  assert.deepEqual(spawnFlags(null, { model: "opus", pooled: true }), ["--model", "opus", "--pooled"], "no spawn_runtime: plain cv-spawn");
+});
+
+test("spawn choices: what an app may ask this machine's plain spawn for", () => {
+  assert.deepEqual(spawnChoices({ poolOnly: true, pooled: true }), { options: ["model", "pooled"], pool_only: true, pooled: true });
+  assert.deepEqual(spawnChoices({ poolOnly: false, pooled: false }), { options: ["model", "pooled"], pool_only: false, pooled: false });
+  assert.deepEqual(spawnChoices(null), { options: ["model", "pooled"], pool_only: false, pooled: false });
 });
 
 test("default titles are made safe for tmux", async () => {

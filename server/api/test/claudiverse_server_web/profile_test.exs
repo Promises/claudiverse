@@ -168,6 +168,36 @@ defmodule ClaudiverseServerWeb.ProfileTest do
     assert as(ctx.app) |> post("/api/profiles/#{p["id"]}/start") |> json_response(409)
   end
 
+  test "a profile's seat shows the profile's model until the seat reports one", ctx do
+    p = profile!(ctx, %{"model" => "claude-haiku-4-5"})
+    chan = agent!(ctx)
+    Phoenix.PubSub.subscribe(ClaudiverseServer.PubSub, Hosts.events_topic(ctx.user.id))
+    as(ctx.app) |> post("/api/profiles/#{p["id"]}/start") |> json_response(202)
+    assert_push "request", %{"request_id" => rid, "op" => "start_profile"}
+
+    # The seat registers without a model: no client reports one.
+    seat = as(ctx.api) |> post("/api/sessions", %{title: "ipsum-admin", claude_session_id: @uuid, profile_id: p["id"], profile_revision: 1})
+           |> json_response(201) |> get_in(["session", "id"])
+    Phoenix.ChannelTest.push(chan, "reply", %{"request_id" => rid, "ok" => true, "result" => %{"title" => "ipsum-admin"}})
+    assert_receive {"profile", %{"op" => "start", "profile" => %{last_start: %{"outcome" => "started", "seat" => ^seat}}}}, 3_000
+
+    assert %{model: "claude-haiku-4-5"} = Repo.get!(ClaudiverseServer.Sessions.Session, seat)
+  end
+
+  test "a resumed seat keeps the model it reported, whatever its profile names", ctx do
+    p = profile!(ctx, %{"model" => "claude-haiku-4-5"})
+    old = session_fixture(ctx.user, %{title: "ipsum-admin", claude_session_id: @uuid, status: :stopped, model: "claude-opus-5"})
+    chan = agent!(ctx)
+    Phoenix.PubSub.subscribe(ClaudiverseServer.PubSub, Hosts.events_topic(ctx.user.id))
+    as(ctx.app) |> post("/api/profiles/#{p["id"]}/start") |> json_response(202)
+    assert_push "request", %{"request_id" => rid, "op" => "start_profile"}
+    as(ctx.api) |> post("/api/sessions", %{title: "ipsum-admin", claude_session_id: @uuid, profile_id: p["id"], profile_revision: 1}) |> json_response(201)
+    Phoenix.ChannelTest.push(chan, "reply", %{"request_id" => rid, "ok" => true, "result" => %{"title" => "ipsum-admin"}})
+    assert_receive {"profile", %{"op" => "start", "profile" => %{last_start: %{"outcome" => "started"}}}}, 3_000
+
+    assert %{model: "claude-opus-5"} = Repo.get!(ClaudiverseServer.Sessions.Session, old.id)
+  end
+
   test "a resumed seat re-registering on its old row is adopted as started", ctx do
     p = profile!(ctx)
     old = session_fixture(ctx.user, %{title: "ipsum-admin", claude_session_id: @uuid, status: :stopped})

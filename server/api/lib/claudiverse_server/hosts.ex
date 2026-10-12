@@ -17,6 +17,11 @@ defmodule ClaudiverseServer.Hosts do
   """
   use GenServer
 
+  import Ecto.Query
+
+  alias ClaudiverseServer.Repo
+  alias ClaudiverseServer.Hosts.Machine
+
   @registry ClaudiverseServer.Hosts.Registry
   @requests ClaudiverseServer.Hosts.Requests
   @spawn_interval_ms 10_000
@@ -73,6 +78,30 @@ defmodule ClaudiverseServer.Hosts do
       [{^old, _}] -> Process.sleep(20) && await_release(key, old, n - 1)
       _ -> :ok
     end
+  end
+
+  @doc """
+  Note that host `name`'s agent is here now (it joined or left): the time
+  goes to its machine row, and the change to the operator's apps as "host"
+  %{"name", "online", "last_seen_at"} on `events_topic/1`.
+  """
+  def seen(user_id, name, online?) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    Repo.insert!(%Machine{user_id: user_id, name: name, last_seen_at: now},
+      on_conflict: [set: [last_seen_at: now, updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)]],
+      conflict_target: [:user_id, :name]
+    )
+
+    Phoenix.PubSub.broadcast(ClaudiverseServer.PubSub, events_topic(user_id),
+      {"host", %{"name" => name, "online" => online?, "last_seen_at" => now}})
+
+    :ok
+  end
+
+  @doc "The machines the user's agents have joined as: %{name => last_seen_at}."
+  def machines(user_id) do
+    from(m in Machine, where: m.user_id == ^user_id, select: {m.name, m.last_seen_at}) |> Repo.all() |> Map.new()
   end
 
   @doc "Online hosts: [{name, meta}]."
@@ -206,7 +235,8 @@ defmodule ClaudiverseServer.Hosts do
     since = since_now()
 
     adopt = fn result ->
-      id = await_adopt(user_id, name, result["title"] || args["title"], since, %{working_directory: args["path"]}, adopt_timeout_ms())
+      known = %{working_directory: args["path"], model: args["model"]}
+      id = await_adopt(user_id, name, result["title"] || args["title"], since, known, adopt_timeout_ms())
       %{"started_as" => id}
     end
 
