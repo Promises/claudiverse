@@ -64,12 +64,12 @@ flowchart LR
 - [Server reference](../../server/README.md)
 - [Web panel reference](../web/README.md)
 - [Runners and tools reference](../../runners/README.md)
-- [Host agent reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
+- [Host agent reference](../../host-agent/README.md)
 - [Android app](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/README.md)
 - [Mac app](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/README.md)
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `mods/claudiverse-seat/hooks/hooks.json`
-- `mods/claudiverse-seat/.claude-plugin/plugin.json`
+- `agent/mod/hooks/register.ts`
+- `agent/mod/hooks/hooks.json`
+- `agent/mod/.claude-plugin/plugin.json`

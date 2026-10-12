@@ -193,16 +193,16 @@ After going online: `GET /api/seats/<title>/inbox?wait=25&event=SessionStart`, p
 - [Server API](server-api.md)
 - Server: [Sessions and Rooms](../../server/sessions-and-rooms.md)
 - Runners and tools: [cv-spawn.sh: starting a seat](../../runners/cv-spawn.md)
-- Host agent: [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md)
+- Host agent: [Starting seats](../../host-agent/starting-seats.md)
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `mods/claudiverse-seat/.claude-plugin/plugin.json`
-- `mods/claudiverse-seat/hooks/hooks.json`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/seat_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/access.ex`
-- `claudiverse_server/lib/claudiverse_server/profiles.ex`
+- `agent/mod/hooks/register.ts`
+- `agent/mod/.claude-plugin/plugin.json`
+- `agent/mod/hooks/hooks.json`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/seat_controller.ex`
+- `server/api/lib/claudiverse_server/sessions.ex`
+- `server/api/lib/claudiverse_server/sessions/access.ex`
+- `server/api/lib/claudiverse_server/profiles.ex`

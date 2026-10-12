@@ -296,16 +296,16 @@ See [../../guide/6-troubleshooting.md](../../guide/6-troubleshooting.md) for ope
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex` (`mirror`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/inbox_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/seat_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/notify_controller.ex` (`send`, `status`)
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex` (`send_message`, `interrupt`)
-- `claudiverse_server/lib/claudiverse_server/seat_inbox.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_links.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/zombie_sweep.ex`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/test/claudiverse_server_web/controllers/mirror_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/seat_links_test.exs`
-- `claudiverse_server/test/claudiverse_server/sessions/zombie_sweep_test.exs`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex` (`mirror`)
+- `server/api/lib/claudiverse_server_web/controllers/inbox_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/seat_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/notify_controller.ex` (`send`, `status`)
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex` (`send_message`, `interrupt`)
+- `server/api/lib/claudiverse_server/seat_inbox.ex`
+- `server/api/lib/claudiverse_server/seat_links.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server/sessions/zombie_sweep.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/test/claudiverse_server_web/controllers/mirror_test.exs`
+- `server/api/test/claudiverse_server_web/seat_links_test.exs`
+- `server/api/test/claudiverse_server/sessions/zombie_sweep_test.exs`

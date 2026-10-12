@@ -339,15 +339,15 @@ Everything else is the upstream's response.
 - [Configuration](configuration.md), [Accounts, sign-up and tokens](auth.md)
 - Guide: [first seat](../../guide/4-first-seat.md), [machine](../../guide/3-machine.md), [troubleshooting](../../guide/6-troubleshooting.md)
 - Runners and tools: [cv-spawn.sh: starting a seat](../runners/cv-spawn.md)
-- Host agent: [Local relay](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/relay.md)
+- Host agent: [Local relay](../host-agent/relay.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server_web/proxy_plug.ex`
-- `claudiverse_server/lib/claudiverse_server/proxy/credentials.ex`
-- `claudiverse_server/lib/claudiverse_server/proxy/observer.ex`
-- `claudiverse_server/lib/claudiverse_server/proxy/request.ex`
-- `claudiverse_server/lib/claudiverse_server_web/endpoint.ex`
-- `claudiverse_server/lib/claudiverse_server/application.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/session.ex`
-- `claudiverse_server/test/claudiverse_server_web/proxy_plug_test.exs`
+- `server/api/lib/claudiverse_server_web/proxy_plug.ex`
+- `server/api/lib/claudiverse_server/proxy/credentials.ex`
+- `server/api/lib/claudiverse_server/proxy/observer.ex`
+- `server/api/lib/claudiverse_server/proxy/request.ex`
+- `server/api/lib/claudiverse_server_web/endpoint.ex`
+- `server/api/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server/sessions/session.ex`
+- `server/api/test/claudiverse_server_web/proxy_plug_test.exs`

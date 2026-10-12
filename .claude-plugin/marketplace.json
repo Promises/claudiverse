@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "claudiverse-seat",
-      "source": "./mods/claudiverse-seat",
+      "source": "./agent/mod",
       "description": "Makes every Claude Code session a claudiverse seat; works offline as plain Claude Code."
     }
   ]

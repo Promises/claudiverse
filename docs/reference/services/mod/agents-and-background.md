@@ -53,7 +53,7 @@ The mod keeps a map of background tasks keyed by task id and sends the whole map
 
 ### What the server does with these rows
 
-Confirmed in `claudiverse_server`:
+Confirmed in `server/api`:
 
 - `agent_started`, `agent_message`, `agent_turn_complete`, `agent_ended` and `agents` are stored, broadcast to viewers as a `message`, and put in a separate agent replay buffer (most recent 300). They do not touch main's busy/idle, pings or permissions, and are left out of main's replay. The latest `agents` list is kept as the room's agent list. A viewer joining gets it in `replay` as `agent_messages` and `agents`, together with `busy_agents`, the count of agents whose `status` is `pending` or `running`.
 - `background_tasks` is stored, broadcast as a `message`, and replaces the room's task list. It is excluded from main's replay and from the agent buffer; the `replay` push carries the list as `background_tasks`. The seat's status reports `background_running`, the count of tasks with status `pending` or `running`. A restarted room starts from the newest stored `background_tasks` row.
@@ -61,7 +61,7 @@ Confirmed in `claudiverse_server`:
 
 ### What the web panel shows
 
-`web/src/components/MessageBubble.tsx` returns `null` for rows of type `agents`, `agent_ended` and `background_tasks`, with a comment that this panel has no side panel for them. Nothing else in `web/src` handles these row types, so the web panel does not display agents or background tasks.
+`server/web/src/components/MessageBubble.tsx` returns `null` for rows of type `agents`, `agent_ended` and `background_tasks`, with a comment that this panel has no side panel for them. Nothing else in `server/web/src` handles these row types, so the web panel does not display agents or background tasks.
 
 ## Configuration
 
@@ -207,8 +207,8 @@ An empty `tasks` array is sent when the last task goes away.
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts` (`syncAgents`, `sendBackground`, and the `agent.spawn`, `session.append`, `tool.call`, `classic.Stop` and `turn.complete` hooks)
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex` (agent and `background_tasks` handling)
-- `claudiverse_server/lib/claudiverse_server/sessions.ex` (replay queries)
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex` (replay push)
-- `web/src/components/MessageBubble.tsx`
+- `agent/mod/hooks/register.ts` (`syncAgents`, `sendBackground`, and the `agent.spawn`, `session.append`, `tool.call`, `classic.Stop` and `turn.complete` hooks)
+- `server/api/lib/claudiverse_server/sessions/room.ex` (agent and `background_tasks` handling)
+- `server/api/lib/claudiverse_server/sessions.ex` (replay queries)
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex` (replay push)
+- `server/web/src/components/MessageBubble.tsx`

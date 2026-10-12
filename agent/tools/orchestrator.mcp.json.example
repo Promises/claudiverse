@@ -1,0 +1,16 @@
+{
+  "_comment": "TEMPLATE — copy to <title>.mcp.json and supply the token + self title. Orchestrator/watcher MCP config: full cv_* tool surface (send/subscribe/forum/handoff/...). CLAUDIVERSE_SELF must match the launched CLAUDIVERSE_TITLE so the server can route pings. Set CLAUDIVERSE_TOKEN from your secrets store (do NOT commit the real token).",
+  "_comment_lifecycle": "CLAUDIVERSE_LIFECYCLE=1 adds cv_spawn / cv_stop / cv_ps — this seat can then START AND KILL OS PROCESSES. Opt-in on purpose: grant it ONLY to the seat that manages the fleet (CEO/orchestrator), never to workers. It is additionally hard-gated off when CLAUDIVERSE_ROLE=worker, so a leaked flag cannot give a worker spawn rights. Omit the key to leave a seat unchanged.",
+  "mcpServers": {
+    "claudiverse": {
+      "command": "node",
+      "args": ["/ABS/PATH/TO/claudiverse/agent/tools/cv-mcp.mjs"],
+      "env": {
+        "CLAUDIVERSE_URL": "http://localhost:4010",
+        "CLAUDIVERSE_TOKEN": "REPLACE_WITH_CLAUDIVERSE_TOKEN",
+        "CLAUDIVERSE_SELF": "your-instance-title",
+        "_HOWTO_LIFECYCLE": "rename this key to CLAUDIVERSE_LIFECYCLE with value 1 to enable spawn/stop/ps for THIS seat"
+      }
+    }
+  }
+}

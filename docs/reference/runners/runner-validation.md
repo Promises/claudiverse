@@ -49,7 +49,7 @@ Notes:
 - `NO-AUTO-VALIDATE` is an opt-out marker a seat puts in a task body when the task produces nothing a second seat could re-derive (a no-commit analysis row, a gate run).
 - A validator whose title does not follow the `VALIDATE #<n>` convention should carry `validates_task_id`, which the server stores for this purpose.
 
-Examples (shaped like the cases in `orchestrator/test/validation.test.mjs`):
+Examples (shaped like the cases in `agent/tools/test/validation.test.mjs`):
 
 | Task | Result |
 |---|---|
@@ -120,12 +120,12 @@ Cheap slots execute from `lorem-tasks` and send their validations to the deep la
 
 ```bash
 # Cheap executors: claim lorem-tasks, enqueue validations into lorem-tasks-deep
-node orchestrator/cv-runner.mjs --slot lorem-w1 --workdir ~/work/lorem-w1 \
+node agent/tools/cv-runner.mjs --slot lorem-w1 --workdir ~/work/lorem-w1 \
   --task-source tasks --fleet lorem-fleet --channel lorem-tasks \
   --validate --validate-channel lorem-tasks-deep --model sonnet --effort medium
 
 # Deep slots: claim lorem-tasks-deep (the validations), stronger model
-node orchestrator/cv-runner.mjs --slot lorem-w4 --workdir ~/work/lorem-w4 \
+node agent/tools/cv-runner.mjs --slot lorem-w4 --workdir ~/work/lorem-w4 \
   --task-source tasks --fleet lorem-fleet --channel lorem-tasks-deep \
   --model opus --effort high
 ```
@@ -226,7 +226,7 @@ Caveat: `promoteContinuations` always uses the forum (`forumGet`/`forumPost`) wi
 
 ## Source
 
-- `orchestrator/cv-validation.mjs`
-- `orchestrator/test/validation.test.mjs`
-- `orchestrator/cv-runner.mjs` (`enqueueValidation`, `promoteContinuations`, flag parsing, `isValidationTask` use in `runTask`)
-- `orchestrator/cv-core.mjs` (`taskCreate`, `taskList`, `forumPost`, `forumRead`, `forumGet`)
+- `agent/tools/cv-validation.mjs`
+- `agent/tools/test/validation.test.mjs`
+- `agent/tools/cv-runner.mjs` (`enqueueValidation`, `promoteContinuations`, flag parsing, `isValidationTask` use in `runTask`)
+- `agent/tools/cv-core.mjs` (`taskCreate`, `taskList`, `forumPost`, `forumRead`, `forumGet`)

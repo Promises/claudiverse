@@ -142,7 +142,7 @@ DELETE /api/sessions/12
 
 ### Model value: the code comments disagree, the server is current
 
-`DashboardPage.tsx` shows `s.model` for every row. A comment in `SessionPage.tsx` says `session.model` "IS NOT REPORTED BY THE CLIENT" and that the server's `sonnet` default was shown for every seat, and so the seat page omits it from its header. The server code has since changed (`Room.note_model` in `claudiverse_server/lib/claudiverse_server/sessions/room.ex`): on every mirrored assistant message it reads `message.model` and updates the session row when it differs. So the dashboard value is the model of the seat's latest mirrored assistant message, and is reliable once the seat has produced one assistant message. Before that, the row still holds the create-time default `sonnet` (the `model` column default), and the dashboard shows that default as if it were real. The seat page's comment is out of date with respect to the server, and its model switcher already uses the latest assistant message first and `session.model` only as a fallback.
+`DashboardPage.tsx` shows `s.model` for every row. A comment in `SessionPage.tsx` says `session.model` "IS NOT REPORTED BY THE CLIENT" and that the server's `sonnet` default was shown for every seat, and so the seat page omits it from its header. The server code has since changed (`Room.note_model` in `server/api/lib/claudiverse_server/sessions/room.ex`): on every mirrored assistant message it reads `message.model` and updates the session row when it differs. So the dashboard value is the model of the seat's latest mirrored assistant message, and is reliable once the seat has produced one assistant message. Before that, the row still holds the create-time default `sonnet` (the `model` column default), and the dashboard shows that default as if it were real. The seat page's comment is out of date with respect to the server, and its model switcher already uses the latest assistant message first and `session.model` only as a fallback.
 
 ## Related pages
 
@@ -159,11 +159,11 @@ DELETE /api/sessions/12
 
 ## Source
 
-- `web/src/pages/DashboardPage.tsx`
-- `web/src/pages/DashboardPage.module.css`
-- `web/src/api/sessions.ts`
-- `web/src/lib/types.ts`
-- `web/src/components/BrandLogo.tsx`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
+- `server/web/src/pages/DashboardPage.tsx`
+- `server/web/src/pages/DashboardPage.module.css`
+- `server/web/src/api/sessions.ts`
+- `server/web/src/lib/types.ts`
+- `server/web/src/components/BrandLogo.tsx`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server/sessions.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`

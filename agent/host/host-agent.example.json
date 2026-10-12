@@ -1,0 +1,24 @@
+{
+  "_doc": "Copy to ~/.config/claudiverse/host-agent.json (chmod 600) and fill in. Never commit the real one.",
+  "server": "http://claudiverse.example:4010",
+  "host_token": "<this machine's host token: Accounts.create_host_token(user, name) on the server>",
+  "seat_token": "<the ordinary seat token this machine's seats already use (CLAUDIVERSE_TOKEN)>",
+  "name": "<optional; defaults to the hostname. Must equal the CLAUDIVERSE_HOST this machine's seats report>",
+  "roots": ["/Users/me/Documents/projects"],
+  "cv_spawn": "/Users/me/Documents/projects/claudiverse/agent/tools/cv-spawn.sh",
+  "bin": "<optional: the claude binary for spawned seats; default is cv-spawn's>",
+  "spawn_runtime": "<optional: a name under runtimes (e.g. stock+mod) that the app's New seat and resume start on, in place of bin>",
+  "spawn_pooled": "<optional: true = the app's New seat and resume send model calls through the server's account pool (--pooled)>",
+  "mcp": "<optional: an MCP config for spawned seats, e.g. one giving them the claudiverse cv_* tools>",
+  "allow_remote_roots": false,
+  "_relay": "Optional: the local relay for a plain `claude` (loopback only). Point the shell at it with claude-relay.zsh / claude-relay.bash, never with settings.json env (that overrides every seat's own routing).",
+  "relay_port": 4097,
+  "_profiles": "What a seat profile may choose on this machine. runtimes: name -> the binary it runs (absolute) and the Claude Code version it is (shown in the desktop); \"pool_only\": true when this machine has no Claude Code login of its own, so its seats run on the server's account pool. modes: a subset of default, acceptEdits, plan, auto (bypassPermissions is never allowed). MCP servers come from ~/.config/claudiverse/mcp-catalog.json ({\"mcpServers\": {name: entry}}), or mcp_catalog to put it elsewhere.",
+  "runtimes": {
+    "stock+mod": { "bin": "/Users/me/.local/bin/claude", "version": "2.1.289" },
+    "patched": { "bin": "/Users/me/Documents/projects/claudiverse/patch-ref/claude-rel", "version": "2.1.289" }
+  },
+  "modes": ["default", "acceptEdits", "plan", "auto"],
+  "max_seats": 10,
+  "min_interval_s": 10
+}

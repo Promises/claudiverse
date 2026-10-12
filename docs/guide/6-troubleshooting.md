@@ -3,14 +3,14 @@
 ## The server
 
 **I can't find the setup code.** Run
-`docker compose -f compose.prod.yml logs server | grep -A3 "setup code"`. Only
+`docker compose -f compose.yml logs server | grep -A3 "setup code"`. Only
 the newest code works: a restart makes a new one. If the log shows none,
 an account already exists; sign in instead.
 
 **The web panel loads, but sign-in fails with a network error.** The panel calls
 the API at `VITE_API_URL`, which was built into it. Check that your browser can
 open `$VITE_API_URL/api/health`. If you change the value in `.env`, rebuild:
-`docker compose -f compose.prod.yml --env-file .env up -d --build`.
+`docker compose -f compose.yml --env-file .env up -d --build`.
 
 **Accounts says "Vault key not configured".** Set `CV_VAULT_KEY` in `.env` and
 run `up -d` again. If the key ever changes, every account needs to be added again.

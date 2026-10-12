@@ -80,7 +80,7 @@ The charter is a file and not a forum post because forum reads are capped at rou
 1. If a tmux session with the worker's name already exists, it logs `⛔ tmux session '<worker>' already exists; refusing to clobber. Releasing claim.`, releases the task, and returns. This is not counted as a spawn failure.
 2. It chooses the model and effort. A validation task (`isValidationTask(task)`) gets `--validate-model` / `--validate-effort`; every other task gets `--model` / `--effort`. Each validate value defaults to its non-validate counterpart. If the chosen value is unset, the flag is not passed and the binary decides.
 3. It creates a temporary directory `cv-runner-brief-*` under the system temp directory and writes the brief to `<worker>.md` in it.
-4. It runs `orchestrator/cv-spawn.sh` with a 90 000 ms timeout. The timeout is 90 s because `cv-spawn.sh` waits for the shell prompt and then verifies the process started; a shorter limit could kill a spawn that was succeeding.
+4. It runs `agent/tools/cv-spawn.sh` with a 90 000 ms timeout. The timeout is 90 s because `cv-spawn.sh` waits for the shell prompt and then verifies the process started; a shorter limit could kill a spawn that was succeeding.
 5. Whatever the outcome, it removes the temporary directory in a `finally` block.
 
 The argument list is built by prepending optional flags after `WORKDIR`, so the later a flag is added in the code, the earlier it appears. The final order is:
@@ -155,7 +155,7 @@ Fixed values: spawn timeout 90 000 ms; `SPAWN_STRIKES` 3; error text in the esca
 The runner's contract with `cv-spawn.sh` is its command line. A typical invocation produced by a slot:
 
 ```bash
-orchestrator/cv-spawn.sh ~/work/repo \
+agent/tools/cv-spawn.sh ~/work/repo \
   --fleet lorem-fleet --origin runner --bin ~/bin/claude-next \
   --mcp ~/worker.mcp.json --effort medium --model <model> \
   --title lorem-w4-t1234 --mode auto \
@@ -187,5 +187,5 @@ The failure counter is never reset on a successful spawn, so three failures of o
 
 ## Source
 
-- `orchestrator/cv-runner.mjs`: `brief()`, charter and `--bin` loading, `runTask()`, `SPAWN_STRIKES` and the main loop
-- `orchestrator/cv-spawn.sh`: argument parsing, `--prompt-file`, session-name clobber check
+- `agent/tools/cv-runner.mjs`: `brief()`, charter and `--bin` loading, `runTask()`, `SPAWN_STRIKES` and the main loop
+- `agent/tools/cv-spawn.sh`: argument parsing, `--prompt-file`, session-name clobber check

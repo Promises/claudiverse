@@ -88,7 +88,7 @@ The server marks a seat busy the moment it hands a prompt over (`Room.send_messa
 
 ### Server side
 
-Confirmed in `claudiverse_server`:
+Confirmed in `server/api`:
 
 - `InboxController.poll` reads `wait`. A missing value uses a default of 50 s; a non-numeric or non-positive value also falls back to 50 s; every value is capped at `inbox_max_wait_s`, whose default is 60 s. The mod's 25 s is therefore well inside the cap. The cap exists because a held poll cannot notice its client disappearing, and the poll is the seat's heartbeat, so a long wait made a killed seat look alive.
 - Each poll registers as the seat's `:inbox` link (`SeatLinks.register`), and registering replaces any older poller for the same user and seat title; the older request is told `:seat_link_replaced` and answers 409. This is what 409 means: a newer poll took over.
@@ -173,10 +173,10 @@ Accepted slash text from the inbox: `/compact` or `/compact <focus instructions>
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts` (`poll`, `deliver`, `idleAgain`, `pollFailed`, `INBOX_COMMANDS`, the `turn.start` and `turn.complete` handlers)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/inbox_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_inbox.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_links.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/notify_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
+- `agent/mod/hooks/register.ts` (`poll`, `deliver`, `idleAgain`, `pollFailed`, `INBOX_COMMANDS`, the `turn.start` and `turn.complete` handlers)
+- `server/api/lib/claudiverse_server_web/controllers/inbox_controller.ex`
+- `server/api/lib/claudiverse_server/seat_inbox.ex`
+- `server/api/lib/claudiverse_server/seat_links.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server_web/controllers/notify_controller.ex`
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`

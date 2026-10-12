@@ -7,7 +7,7 @@ It has two halves. The code calls them Component B and Component D.
 - **Submissions (Component B).** A worker delivers a piece of code for an address and build with one HTTP call, without touching git. The server stores it durably, records the gate runs (compile, diff, test, whatever the operator defines) with their raw output, and tracks the submission through a fixed state machine until it is integrated into the repository.
 - **Builds (Component D).** Per-submission gates can only see their own unit, and a whole-image build is too slow to run per submission. So integration is automatic on the cheap gate, and a full build runs periodically. A red build plus the previous green build define a closed set of integrations, one of which is at fault. The server records builds, says when the next one is due, and lists that set of suspects.
 
-All endpoints require the usual Bearer token (`Authorization: Bearer $TOKEN`), see [auth.md](auth.md). The orchestrator scripts `orchestrator/kb-integrate.mjs` and `orchestrator/kb-fullbuild.mjs` are the clients that gate and integrate submissions and run and record full builds, respectively. The server itself never runs a gate or a build; it only records results.
+All endpoints require the usual Bearer token (`Authorization: Bearer $TOKEN`), see [auth.md](auth.md). The clients that gate and integrate submissions and run and record full builds are your own scripts. The server itself never runs a gate or a build; it only records results.
 
 ## How it works
 
@@ -437,18 +437,18 @@ Unbounded (no green build exists):
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/submissions.ex`
-- `claudiverse_server/lib/claudiverse_server/builds.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/submission.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/submission_gate.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/integration.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/build.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/submission_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/build_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/priv/repo/migrations/20260909140000_create_submissions.exs`
-- `claudiverse_server/priv/repo/migrations/20260910090000_create_builds.exs`
-- `claudiverse_server/test/claudiverse_server/submissions_test.exs`
-- `claudiverse_server/test/claudiverse_server/builds_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/submission_controller_test.exs`
-- orchestrator/kb-integrate.mjs, orchestrator/kb-fullbuild.mjs (clients)
+- `server/api/lib/claudiverse_server/submissions.ex`
+- `server/api/lib/claudiverse_server/builds.ex`
+- `server/api/lib/claudiverse_server/knowledge/submission.ex`
+- `server/api/lib/claudiverse_server/knowledge/submission_gate.ex`
+- `server/api/lib/claudiverse_server/knowledge/integration.ex`
+- `server/api/lib/claudiverse_server/knowledge/build.ex`
+- `server/api/lib/claudiverse_server_web/controllers/submission_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/build_controller.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/priv/repo/migrations/20260909140000_create_submissions.exs`
+- `server/api/priv/repo/migrations/20260910090000_create_builds.exs`
+- `server/api/test/claudiverse_server/submissions_test.exs`
+- `server/api/test/claudiverse_server/builds_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/submission_controller_test.exs`
+- agent/tools/kb-integrate.mjs, agent/tools/kb-fullbuild.mjs (clients)

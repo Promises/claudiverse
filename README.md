@@ -3,6 +3,44 @@
 **Run a fleet of Claude Code sessions on your own machines, and watch and steer
 them from your browser, your Mac or your phone.**
 
+**[Quick start](#quick-start)** · [Setup guide](docs/guide/README.md) · [Documentation](docs/README.md)
+
+## Quick start
+
+You need Docker on the server, and Node.js 22+, tmux and Claude Code 2.1.287+
+on each machine that runs seats. The server, once:
+
+```sh
+git clone https://github.com/Promises/claudiverse.git claudiverse
+cd claudiverse
+cp .env.example .env    # set SECRET_KEY_BASE, CV_VAULT_KEY and the URLs
+docker compose -f compose.yml --env-file .env up -d --build
+docker compose -f compose.yml logs server | grep -A3 "setup code"
+```
+
+Then:
+
+1. Open the web panel, create your account with the setup code, and add your
+   Claude accounts under **Accounts**.
+2. On each machine that runs seats, install the seat mod and the host agent:
+   [a machine for seats](docs/guide/3-machine.md), about ten minutes.
+3. [Start a seat](docs/guide/4-first-seat.md) from the web panel or the apps.
+
+The [setup guide](docs/guide/README.md) walks through every step.
+
+## What's in this repository, and what you need
+
+| Folder | What it is | Where it runs |
+|---|---|---|
+| [`server/`](server) | The server (`server/api`: Elixir, Phoenix, SQLite) and the web panel (`server/web`) | Once, in Docker, from `compose.yml` |
+| [`agent/`](agent) | What each machine with Claude Code installs: the host agent that starts seats (`agent/host`), the claudiverse-seat mod (`agent/mod`), and the `cv_*` MCP tools, `cv-spawn` and `cv-runner` (`agent/tools`) | On each machine that runs seats |
+| [`docs/`](docs) | The setup guide and the reference | |
+| [claudiverse-apps](https://github.com/Promises/claudiverse-apps) | The Mac and Android apps. Optional: the web panel needs nothing extra. | On your Mac and phone |
+
+`compose.dev.yml` is a development stack with live reload.
+
+## What it is
+
 Claudiverse connects ordinary Claude Code sessions, which it calls **seats**, to
 a small self-hosted server. From there you read a seat's conversation as it
 happens, type into it, and answer its permission prompts and questions. Seats
@@ -167,7 +205,7 @@ Why it is useful:
 Try it, once a machine is set up ([setup guide](docs/guide/README.md), step 3):
 
 ```sh
-cd ~/claudiverse/orchestrator
+cd ~/claudiverse/agent/tools
 CLAUDIVERSE_URL=http://claudiverse.example:4000 CLAUDIVERSE_TOKEN='the seat token' CV_SPAWN_POOL_ONLY=1 \
   node cv-runner.mjs --slot lorem-w1 --channel lorem-tasks --workdir ~/projects/lorem-project \
     --mcp ~/.config/claudiverse/mcp-catalog.json --validate
@@ -178,67 +216,27 @@ owner, from the web panel's Forum or with a seat's `cv_task_add`. The full refer
 lanes, both task sources, validation routing, HALT, drain and escalations:
 [docs/reference/runners](docs/reference/runners/README.md).
 
-## Quick start
-
-You need Docker on the server, and Node.js 22+, tmux and Claude Code 2.1.287+
-on each machine that runs seats. The [setup guide](docs/guide/README.md) walks
-through every step. In short:
-
-```sh
-# The server
-git clone https://github.com/Promises/claudiverse-oss.git claudiverse
-cd claudiverse
-cp .env.example .env    # set SECRET_KEY_BASE, CV_VAULT_KEY and the URLs
-docker compose -f compose.prod.yml --env-file .env up -d --build
-docker compose -f compose.prod.yml logs server | grep -A3 "setup code"
-```
-
-Then open the web panel, create your account with the setup code, and add your
-Claude accounts under **Accounts**. On each machine, install the
-claudiverse-seat mod and the
-[host agent](https://github.com/Promises/claudiverse-host-agent-oss), and start
-a seat.
-
 ## Documentation
 
 - [Setup guide](docs/guide/README.md): the whole stack, from nothing.
 - [Reference](docs/README.md): every part in depth, one page per feature:
   [server](docs/reference/server/README.md),
   [runners](docs/reference/runners/README.md),
-  [seat mod](docs/reference/services/mod/README.md) and
-  [web panel](docs/reference/services/web/README.md). The
-  [host agent](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
-  and the [Mac and Android apps](https://github.com/Promises/claudiverse-apps/blob/main/docs/README.md)
-  are documented in their own repos.
+  [seat mod](docs/reference/services/mod/README.md),
+  [web panel](docs/reference/services/web/README.md) and
+  [host agent](docs/reference/host-agent/README.md).
+  The [Mac and Android apps](https://github.com/Promises/claudiverse-apps/blob/main/docs/README.md)
+  are documented in their own repo.
 - [Glossary](docs/glossary.md): seats, fleets, rooms, lanes, the pool and the
   rest, defined once.
 - [DEPLOY.md](docs/DEPLOY.md): the production stack, backups and upgrades.
-- [orchestrator/README.md](orchestrator/README.md): the `cv_*` tools, `cvctl`
+- [agent/tools/README.md](agent/tools/README.md): the `cv_*` tools, `cvctl`
   and the forum's task boards.
 - [docs/reference/runners](docs/reference/runners/README.md): runners, the
   `cv_*` tools and `cv-spawn.sh`, in depth.
 - [docs/design/](docs/design): design notes, such as seat profiles.
 - [ANTHROPIC_AUTHS_DESIGN.md](docs/ANTHROPIC_AUTHS_DESIGN.md): how the account
   pool works.
-
-## What's in this repository
-
-| Path | What it is |
-|---|---|
-| `claudiverse_server/` | The server: Elixir 1.19, Phoenix 1.8, SQLite |
-| `web/` | The web panel: Vite, React, TypeScript |
-| `mods/claudiverse-seat/` | The Claude Code mod that makes a session a seat |
-| `orchestrator/` | The `cv_*` MCP server, `cvctl`, `cv-spawn.sh` and `cv-runner` |
-| `docs/` | The setup guide, deployment and design notes |
-| `compose.prod.yml` | The production stack: the server and the web panel |
-| `docker-compose.yml` | A development stack with live reload |
-
-## The other repositories
-
-- [claudiverse-host-agent-oss](https://github.com/Promises/claudiverse-host-agent-oss):
-  the per-machine agent that starts seats.
-- [claudiverse-apps](https://github.com/Promises/claudiverse-apps): the Mac and
-  Android apps.
 
 ## Licence
 

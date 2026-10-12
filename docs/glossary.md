@@ -1,8 +1,9 @@
 # Glossary
 
-The words the Claudiverse documentation uses, and what each one means. Pages
-in all three repositories use these terms in exactly these senses, so a word
-read on a server page means the same on a host agent or app page. Where the
+The words the Claudiverse documentation uses, and what each one means. Every
+page, from the server's to the host agent's and the apps', uses these terms in
+exactly these senses, so a word read on a server page means the same on a
+host agent or app page. Where the
 API, a table or an app's screen uses another word for the same thing, the
 entry says so.
 
@@ -55,8 +56,8 @@ name for a seat with the `basic` [tool level](#tool-level).
 ### Role
 
 A profile's declared part in its fleet: `member`, `watcher` or
-`orchestrator`. It is shown on the fleet board. The server also derives a
-tool-policy role, `worker` or `orchestrator`, from the [tool level](#tool-level);
+`agent/tools`. It is shown on the fleet board. The server also derives a
+tool-policy role, `worker` or `agent/tools`, from the [tool level](#tool-level);
 pages that mean that one say "tool-policy role".
 
 ### Origin
@@ -93,13 +94,13 @@ the server's record and the channel, and "machine" for the computer itself.
 The small Node.js service, one per host, that starts, resumes, stops and
 interrupts seats when the server asks. It connects out to the server, opens
 no port, and decides for itself what its machine allows. See the
-[host agent reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md).
+[host agent reference](reference/host-agent/README.md).
 
 ### Allowed folders
 
 The host agent's folder whitelist, the `roots` array in its config. A seat
 can only be started in a folder inside one of them. See
-[Allowed folders](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/roots.md).
+[Allowed folders](reference/host-agent/roots.md).
 
 ### Mod
 
@@ -119,7 +120,7 @@ cover mod seats.
 
 The host agent's optional local HTTP relay. It lets a plain `claude` typed in
 a shell use the [pool](#pool) through the [proxy](#proxy), with a direct
-fallback. See [Relay](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/relay.md).
+fallback. See [Relay](reference/host-agent/relay.md).
 
 ## Traffic between a seat and the server
 
@@ -299,6 +300,6 @@ code any more.
 
 ### Web panel
 
-The browser client: a React single-page app in `web/`, served as static files.
+The browser client: a React single-page app in `server/web/`, served as static files.
 Its first page is the **Dashboard**. See the
 [web panel reference](reference/services/web/README.md).

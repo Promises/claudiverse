@@ -31,7 +31,7 @@ The dialog shows the header `Permission requested: <display_name or tool_name>`,
 
 as the event `permission_response` (`decision` is `"allow"` or `"deny"`). The dialog does not remove itself and has no pending state. It disappears when the server broadcasts `permission_resolved` for that `request_id`. The server sends that broadcast when the decision is taken, and also when the prompt is settled some other way: answered at the seat's terminal, timed out, or the seat went away. So a prompt answered elsewhere, or by a second browser, vanishes from every open panel.
 
-The login uses `scope: "app"` (`web/src/api/auth.ts`, for both `login` and `setup`). The server rule, in `session_channel.ex`, is that a `permission_response` with `"decision": "allow"` is accepted only when `Accounts.app_powers?` is true for the connection's token context (`app` or `super`). Any other token gets the channel reply `{"reason": "only the operator's app may allow a permission prompt"}`. A deny is accepted from any observer. The panel's push does not read the reply, so a refused allow shows nothing in the panel; the dialog simply stays. The panel's own token is an `app` token, so this only matters if you reuse a different token.
+The login uses `scope: "app"` (`server/web/src/api/auth.ts`, for both `login` and `setup`). The server rule, in `session_channel.ex`, is that a `permission_response` with `"decision": "allow"` is accepted only when `Accounts.app_powers?` is true for the connection's token context (`app` or `super`). Any other token gets the channel reply `{"reason": "only the operator's app may allow a permission prompt"}`. A deny is accepted from any observer. The panel's push does not read the reply, so a refused allow shows nothing in the panel; the dialog simply stays. The panel's own token is an `app` token, so this only matters if you reuse a different token.
 
 ```mermaid
 sequenceDiagram
@@ -148,7 +148,7 @@ Neither component has settings. The behaviour follows from the token and the ser
 
 | Item | Value |
 | --- | --- |
-| Login scope | `"app"`, sent by `login` and `setup` in `web/src/api/auth.ts`. Required to allow a permission prompt. |
+| Login scope | `"app"`, sent by `login` and `setup` in `server/web/src/api/auth.ts`. Required to allow a permission prompt. |
 | Channel role | `observer` (the panel joins `session:<id>` as an observer). |
 | Server URL | `VITE_API_URL`, default `http://localhost:4000` (see [setup and login](setup-and-login.md)). |
 
@@ -201,14 +201,14 @@ UI controls: Allow, Deny; one button per question option; Send answer; the compo
 
 ## Source
 
-- `web/src/components/PermissionDialog.tsx`
-- `web/src/components/QuestionCard.tsx`
-- `web/src/components/MessageBubble.tsx`
-- `web/src/pages/SessionPage.tsx`
-- `web/src/hooks/useSession.ts`
-- `web/src/lib/types.ts`
-- `web/src/api/auth.ts`
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/hook_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/question_holds.ex`
+- `server/web/src/components/PermissionDialog.tsx`
+- `server/web/src/components/QuestionCard.tsx`
+- `server/web/src/components/MessageBubble.tsx`
+- `server/web/src/pages/SessionPage.tsx`
+- `server/web/src/hooks/useSession.ts`
+- `server/web/src/lib/types.ts`
+- `server/web/src/api/auth.ts`
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server_web/controllers/hook_controller.ex`
+- `server/api/lib/claudiverse_server/question_holds.ex`

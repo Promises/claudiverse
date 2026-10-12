@@ -6,7 +6,7 @@
 
 These tools are opt-in. They are registered only when `CLAUDIVERSE_LIFECYCLE=1` is set in that seat's cv-mcp environment and `CLAUDIVERSE_ROLE` is not `worker`. Grant it only to the seat that manages the fleet: adding the tools to a config gives that seat the power to start and kill OS processes.
 
-They run on the host where cv-mcp runs. They call `tmux` and `orchestrator/cv-spawn.sh` with `execFile` and an argument array, never a shell string, so a title or prompt containing quotes or `;` is passed through as data. They do not use the server's spawn endpoint, and `cv-spawn.sh` remains the one place that knows how a seat is launched (see [cv-spawn.md](cv-spawn.md)).
+They run on the host where cv-mcp runs. They call `tmux` and `agent/tools/cv-spawn.sh` with `execFile` and an argument array, never a shell string, so a title or prompt containing quotes or `;` is passed through as data. They do not use the server's spawn endpoint, and `cv-spawn.sh` remains the one place that knows how a seat is launched (see [cv-spawn.md](cv-spawn.md)).
 
 Because tmux is local, none of these tools can see seats on other machines.
 
@@ -59,10 +59,10 @@ flowchart TD
 | Setting | Where | Effect |
 |---|---|---|
 | `CLAUDIVERSE_LIFECYCLE=1` | cv-mcp environment | Registers `cv_spawn`, `cv_stop`, `cv_ps`. Any other value leaves them out. |
-| `CLAUDIVERSE_ROLE` | cv-mcp environment | If `worker`, the tools are never registered. Unset behaves as `orchestrator` for this check. |
+| `CLAUDIVERSE_ROLE` | cv-mcp environment | If `worker`, the tools are never registered. Unset behaves as `agent/tools` for this check. |
 | `CV_SPAWN_ORIGIN` | cv-mcp environment | Inherited by `cv-spawn.sh`; sets the origin recorded for seats started by `cv_spawn`. Default `spawn`. |
 
-Requirements on the host: `tmux` on `PATH`, and `orchestrator/cv-spawn.sh` executable.
+Requirements on the host: `tmux` on `PATH`, and `agent/tools/cv-spawn.sh` executable.
 
 Dynamic-policy caveat. With no `CLAUDIVERSE_ROLE`, cv-mcp runs a dynamic policy: it asks the server for the seat's role and enables or disables tool groups accordingly (`cv-policy.mjs`). The lifecycle tools are registered in the shared group, which the policy never disables. So on a seat with no `CLAUDIVERSE_ROLE` and `CLAUDIVERSE_LIFECYCLE=1`, the tools stay enabled even if the server reports that seat's role as `worker`. The only hard gate is the static `CLAUDIVERSE_ROLE=worker`. Do not set `CLAUDIVERSE_LIFECYCLE=1` in a config shared by seats that include workers.
 
@@ -160,13 +160,13 @@ Empty buckets print `(none)`. The host name comes from the `hostname` command; i
 - [cv-runner: the worker brief, the charter, and spawning](runner-brief-and-spawn.md)
 - [cv-runner: HALT and drain](runner-halt-and-drain.md)
 - Server: [Profiles and the host channel](../server/profiles-and-hosts.md)
-- Host agent: [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md)
+- Host agent: [Starting seats](../host-agent/starting-seats.md)
 - Android: [New seat (spawning a seat)](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/new-seat.md)
 - Mac: [New seat](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/new-seat.md)
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (lifecycle section)
-- `orchestrator/cv-policy.mjs` (group policy)
-- `orchestrator/cv-spawn.sh`
-- `orchestrator/cv-runner.mjs` (spawn timeout)
+- `agent/tools/cv-mcp.mjs` (lifecycle section)
+- `agent/tools/cv-policy.mjs` (group policy)
+- `agent/tools/cv-spawn.sh`
+- `agent/tools/cv-runner.mjs` (spawn timeout)

@@ -216,5 +216,5 @@ Endpoints the runner calls for claiming and reaping:
 
 ## Source
 
-- `orchestrator/cv-runner.mjs` (`claim`, `claimFromTasks`, `runTask`, `release`, `readDecline`, `releaseDeclined`, `commitsDurable`, `preserveRef`, `cpuSecondsOfTree`, main loop)
-- `orchestrator/cv-core.mjs` (`forumClaim`, `forumRead`, `forumSetStatus`, `forumAssign`, `taskClaim`, `taskStart`, `taskShow`, `taskRelease`, `handoffGet`)
+- `agent/tools/cv-runner.mjs` (`claim`, `claimFromTasks`, `runTask`, `release`, `readDecline`, `releaseDeclined`, `commitsDurable`, `preserveRef`, `cpuSecondsOfTree`, main loop)
+- `agent/tools/cv-core.mjs` (`forumClaim`, `forumRead`, `forumSetStatus`, `forumAssign`, `taskClaim`, `taskStart`, `taskShow`, `taskRelease`, `handoffGet`)

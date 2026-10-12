@@ -367,11 +367,11 @@ A `permission_response` for an unknown `request_id` still replies `:ok` and does
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server_web/controllers/hook_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/mcp_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/question_holds.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_links.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/test/claudiverse_server_web/seat_links_test.exs`
+- `server/api/lib/claudiverse_server_web/controllers/hook_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/mcp_controller.ex`
+- `server/api/lib/claudiverse_server/question_holds.ex`
+- `server/api/lib/claudiverse_server/seat_links.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/test/claudiverse_server_web/seat_links_test.exs`

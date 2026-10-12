@@ -1,0 +1,22 @@
+# systemd USER unit for the claudiverse host agent. install.sh fills in @NODE@,
+# @AGENT@ and @PATH@, installs it under ~/.config/systemd/user/ and enables it.
+# For it to run without an open login session: loginctl enable-linger $USER
+[Unit]
+Description=claudiverse host agent (New seat: browse folders, start seats)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=@NODE@ @AGENT@
+Environment=PATH=@PATH@
+Restart=always
+RestartSec=10
+# Stop or restart only the agent itself. The seats it starts run in a tmux
+# server that is its child, so it is in this unit's cgroup, and the default
+# (control-group) killed every seat on the machine at each restart, which
+# ./install.sh does on every update (MEASURED on Debian 12, systemd 252).
+# Seats outlive the agent; it finds them again by their tmux sessions.
+KillMode=process
+
+[Install]
+WantedBy=default.target

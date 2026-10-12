@@ -217,14 +217,14 @@ There is no cleanup of seat files or mirrored images; they accumulate on disk.
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/app_builds.ex`
-- `claudiverse_server/lib/claudiverse_server/app_builds/app_build.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_files.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/app_build_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/file_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/endpoint.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/priv/repo/migrations/20261004000000_create_app_builds.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/app_build_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/mirror_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/file_controller_test.exs`
+- `server/api/lib/claudiverse_server/app_builds.ex`
+- `server/api/lib/claudiverse_server/app_builds/app_build.ex`
+- `server/api/lib/claudiverse_server/seat_files.ex`
+- `server/api/lib/claudiverse_server_web/controllers/app_build_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/file_controller.ex`
+- `server/api/lib/claudiverse_server_web/endpoint.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/priv/repo/migrations/20261004000000_create_app_builds.exs`
+- `server/api/test/claudiverse_server_web/controllers/app_build_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/mirror_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/file_controller_test.exs`

@@ -193,11 +193,11 @@ After a failed Remove the page does not re-enable the card's buttons (the busy f
 
 ## Source
 
-- `web/src/pages/AccountsPage.tsx`
-- `web/src/api/anthropicAuths.ts`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/anthropic_auth_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/vault.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/oauth.ex`
+- `server/web/src/pages/AccountsPage.tsx`
+- `server/web/src/api/anthropicAuths.ts`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/anthropic_auth_controller.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/vault.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/oauth.ex`

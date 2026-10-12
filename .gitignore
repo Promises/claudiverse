@@ -4,8 +4,8 @@ patch-ref/
 claude-source-reference-*/
 
 # Secrets: token-bearing / machine-specific (use the .example templates)
-orchestrator/*.mcp.json
-!orchestrator/*.mcp.json.example
+agent/tools/*.mcp.json
+!agent/tools/*.mcp.json.example
 .claude/
 CLAUDE-ENV-INFO.md
 # Prod env files: real secrets (SECRET_KEY_BASE etc.) — keep only the template.
@@ -23,7 +23,7 @@ dist/
 *.log
 erl_crash.dump
 *.beam
-/claudiverse_server/priv/static/assets/
+/server/api/priv/static/assets/
 
 # DB
 *.sqlite

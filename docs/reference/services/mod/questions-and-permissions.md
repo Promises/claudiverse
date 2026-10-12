@@ -216,10 +216,10 @@ Replies:
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/hook_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/question_holds.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts.ex`
-- `web/src/api/auth.ts`
+- `agent/mod/hooks/register.ts`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/hook_controller.ex`
+- `server/api/lib/claudiverse_server/question_holds.ex`
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
+- `server/api/lib/claudiverse_server/accounts.ex`
+- `server/web/src/api/auth.ts`

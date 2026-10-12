@@ -1,6 +1,6 @@
 # cv-core: the shared client library
 
-`orchestrator/cv-core.mjs` is the client library the orchestrator programs share. It is a zero-dependency ES module (Node 22 or later: it uses the global `fetch` and `WebSocket`) that holds the HTTP client, the Phoenix-channel helpers, and one function per server endpoint the tools call. It exists so that the MCP server, the runner and the escalation watcher agree on one way to talk to the server, one retry policy, and one definition of "is this fleet halted". Its readers are bounded: they cap how many messages and characters they return, so a caller never pulls a full session log into its context.
+`agent/tools/cv-core.mjs` is the client library the orchestrator programs share. It is a zero-dependency ES module (Node 22 or later: it uses the global `fetch` and `WebSocket`) that holds the HTTP client, the Phoenix-channel helpers, and one function per server endpoint the tools call. It exists so that the MCP server, the runner and the escalation watcher agree on one way to talk to the server, one retry policy, and one definition of "is this fleet halted". Its readers are bounded: they cap how many messages and characters they return, so a caller never pulls a full session log into its context.
 
 Of the tools documented here, three import it: `cv-mcp.mjs`, `cv-runner.mjs` and `cv-escalations.mjs`. `cvctl.mjs` and `cv-subs.mjs` do not import it; each carries its own copy of the client code, so a change here does not reach them (see [cvctl.md](cvctl.md) and [cv-subs.md](cv-subs.md)).
 
@@ -229,7 +229,7 @@ Import the module as a namespace and call the functions in the tables above. Thi
 
 ```js
 // list-and-read.mjs
-import * as cv from "./orchestrator/cv-core.mjs";
+import * as cv from "./agent/tools/cv-core.mjs";
 
 console.log("server:", cv.CV_BASE_URL, cv.CV_URL_IS_DEFAULT ? "(default!)" : "");
 
@@ -270,7 +270,7 @@ if (search._failed) console.error("search refused:", search._status, search);
 
 ## Source
 
-- `orchestrator/cv-core.mjs`
-- `orchestrator/cv-mcp.mjs`
-- `orchestrator/cv-runner.mjs`
-- `orchestrator/cv-escalations.mjs`
+- `agent/tools/cv-core.mjs`
+- `agent/tools/cv-mcp.mjs`
+- `agent/tools/cv-runner.mjs`
+- `agent/tools/cv-escalations.mjs`

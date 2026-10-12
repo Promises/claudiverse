@@ -33,7 +33,7 @@ one record, never the diagnostic itself.
 answers `200 {"status":"ok"}` once the application is up. Because the
 endpoint is the last child of the supervision tree, and migrations run before
 it, a 200 means the database is migrated and every process started. The
-container health check in `compose.prod.yml` uses it.
+container health check in `compose.yml` uses it.
 
 ### Incident log
 
@@ -158,12 +158,12 @@ endpoint reads the whole file on each call; it is small by design (one line
 per 5xx).
 
 On the server itself the file can be read directly, e.g.
-`docker compose -f compose.prod.yml exec server tail -n 20 /data/incidents.jsonl`.
+`docker compose -f compose.yml exec server tail -n 20 /data/incidents.jsonl`.
 
 ### Reading the slow-query log
 
 ```bash
-docker compose -f compose.prod.yml logs server | grep "SLOW QUERY"
+docker compose -f compose.yml logs server | grep "SLOW QUERY"
 ```
 
 ## Failure modes and troubleshooting
@@ -189,10 +189,10 @@ docker compose -f compose.prod.yml logs server | grep "SLOW QUERY"
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/incident_log.ex`
-- `claudiverse_server/lib/claudiverse_server/slow_query_log.ex`
-- `claudiverse_server/lib/claudiverse_server/application.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/incident_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/health_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/telemetry.ex`
-- `compose.prod.yml`
+- `server/api/lib/claudiverse_server/incident_log.ex`
+- `server/api/lib/claudiverse_server/slow_query_log.ex`
+- `server/api/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server_web/controllers/incident_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/health_controller.ex`
+- `server/api/lib/claudiverse_server_web/telemetry.ex`
+- `compose.yml`

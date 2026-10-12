@@ -4,7 +4,7 @@ A submission is a durable delivery of a piece of source code for one function, i
 
 cv-mcp exposes three tools for this: `cv_submit_match` (deliver), `cv_submission_list` (find) and `cv_submission_get` (read one with its gate runs). All three are in the group that every role has (see [mcp.md](mcp.md)). Every result is plain text with a blank line and a timestamp line (`⏱ <time>`) appended; the examples below omit that line.
 
-The rest of the lifecycle (recording gate runs, integrating, reverting, listing gates with no positive control) has no MCP tool. The matching functions are exported from `orchestrator/cv-core.mjs` for other callers; see [cv-core.md](cv-core.md).
+The rest of the lifecycle (recording gate runs, integrating, reverting, listing gates with no positive control) has no MCP tool. The matching functions are exported from `agent/tools/cv-core.mjs` for other callers; see [cv-core.md](cv-core.md).
 
 ## How it works
 
@@ -158,7 +158,7 @@ The first line is `#<id> <address> <build> — <state>`; the second shows `unit`
 
 ### Functions exported for other callers
 
-`orchestrator/cv-core.mjs` also exports `subGate(id, gate)` (`POST /api/kb/submissions/:id/gates`), `subIntegrate(id, body)` (`POST /api/kb/submissions/:id/integrate`), `subRevert(id, body)` (`POST /api/kb/submissions/:id/revert`) and `subBlindGates()` (`GET /api/kb/submissions/blind-gates`). They have no MCP tool. `subSubmit`, `subGet` and `subList` are the functions behind the three tools above. All of them use helpers that return a `{ _failed: true, _status, ... }` object on a non-2xx response rather than throwing.
+`agent/tools/cv-core.mjs` also exports `subGate(id, gate)` (`POST /api/kb/submissions/:id/gates`), `subIntegrate(id, body)` (`POST /api/kb/submissions/:id/integrate`), `subRevert(id, body)` (`POST /api/kb/submissions/:id/revert`) and `subBlindGates()` (`GET /api/kb/submissions/blind-gates`). They have no MCP tool. `subSubmit`, `subGet` and `subList` are the functions behind the three tools above. All of them use helpers that return a `{ _failed: true, _status, ... }` object on a non-2xx response rather than throwing.
 
 ## Failure modes and troubleshooting
 
@@ -187,8 +187,8 @@ The core helpers do not throw on an HTTP error. They return the response body wi
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs`: tool definitions (`cv_submit_match`, `cv_submission_list`, `cv_submission_get`)
-- `orchestrator/cv-core.mjs`: `subSubmit`, `subGet`, `subList`, `subGate`, `subIntegrate`, `subRevert`, `subBlindGates`, and the error-returning request helpers
-- `claudiverse_server/lib/claudiverse_server_web/controllers/submission_controller.ex`: the endpoints
-- `claudiverse_server/lib/claudiverse_server/submissions.ex`: submit, supersede, gate and integrate rules
-- `claudiverse_server/lib/claudiverse_server/knowledge/submission.ex`: states and transitions
+- `agent/tools/cv-mcp.mjs`: tool definitions (`cv_submit_match`, `cv_submission_list`, `cv_submission_get`)
+- `agent/tools/cv-core.mjs`: `subSubmit`, `subGet`, `subList`, `subGate`, `subIntegrate`, `subRevert`, `subBlindGates`, and the error-returning request helpers
+- `server/api/lib/claudiverse_server_web/controllers/submission_controller.ex`: the endpoints
+- `server/api/lib/claudiverse_server/submissions.ex`: submit, supersede, gate and integrate rules
+- `server/api/lib/claudiverse_server/knowledge/submission.ex`: states and transitions

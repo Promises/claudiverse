@@ -385,16 +385,16 @@ Response: `{"ok": true}`. Failures: 400 `{"error": "<message>"}` for any validat
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/tasks.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks/task.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks/task_dep.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks/task_event.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/task_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/runners.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/runner_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions.ex` (`stamp_runner_seat/4`)
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/priv/repo/migrations/20260909220000_create_tasks.exs`
-- `claudiverse_server/test/claudiverse_server/tasks_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/task_controller_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/runner_test.exs`
+- `server/api/lib/claudiverse_server/tasks.ex`
+- `server/api/lib/claudiverse_server/tasks/task.ex`
+- `server/api/lib/claudiverse_server/tasks/task_dep.ex`
+- `server/api/lib/claudiverse_server/tasks/task_event.ex`
+- `server/api/lib/claudiverse_server_web/controllers/task_controller.ex`
+- `server/api/lib/claudiverse_server/runners.ex`
+- `server/api/lib/claudiverse_server_web/controllers/runner_controller.ex`
+- `server/api/lib/claudiverse_server/sessions.ex` (`stamp_runner_seat/4`)
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/priv/repo/migrations/20260909220000_create_tasks.exs`
+- `server/api/test/claudiverse_server/tasks_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/task_controller_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/runner_test.exs`

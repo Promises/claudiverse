@@ -50,7 +50,7 @@ and a **host token** for its host agent. On the **server**, in the
 hostname (what `hostname` prints on the machine):
 
 ```sh
-docker compose -f compose.prod.yml exec server bin/claudiverse_server eval \
+docker compose -f compose.yml exec server bin/claudiverse_server eval \
   'ClaudiverseServer.Release.connect_machine("you@example.com", "my-laptop")'
 ```
 
@@ -75,9 +75,10 @@ Treat both like passwords.
 
 ```sh
 cd ~
-git clone https://github.com/Promises/claudiverse-oss.git claudiverse
-git clone https://github.com/Promises/claudiverse-host-agent-oss.git claudiverse-host-agent
+git clone https://github.com/Promises/claudiverse.git claudiverse
 ```
+
+Everything a machine installs is in its `agent/` folder.
 
 ## The claudiverse-seat mod
 
@@ -98,14 +99,14 @@ boards, and ask you questions. Install them once, and put them in this
 machine's MCP catalog so seats can be given them by name:
 
 ```sh
-(cd ~/claudiverse/orchestrator && npm install)
+(cd ~/claudiverse/agent/tools && npm install)
 mkdir -p ~/.config/claudiverse
 cat > ~/.config/claudiverse/mcp-catalog.json <<EOF
 {
   "mcpServers": {
     "claudiverse": {
       "command": "node",
-      "args": ["$HOME/claudiverse/orchestrator/cv-mcp.mjs"],
+      "args": ["$HOME/claudiverse/agent/tools/cv-mcp.mjs"],
       "env": { "CLAUDIVERSE_URL": "$SERVER", "CLAUDIVERSE_TOKEN": "$SEAT_TOKEN" }
     }
   }
@@ -129,7 +130,7 @@ cat > ~/.config/claudiverse/host-agent.json <<EOF
   "seat_token": "$SEAT_TOKEN",
   "name": "$(hostname)",
   "roots": ["$HOME/projects"],
-  "cv_spawn": "$HOME/claudiverse/orchestrator/cv-spawn.sh",
+  "cv_spawn": "$HOME/claudiverse/agent/tools/cv-spawn.sh",
   "runtimes": {
     "stock+mod": {
       "bin": "$HOME/.local/bin/claude",
@@ -141,7 +142,7 @@ cat > ~/.config/claudiverse/host-agent.json <<EOF
   "modes": ["default", "acceptEdits", "plan", "auto"]
 }
 EOF
-cd ~/claudiverse-host-agent
+cd ~/claudiverse/agent/host
 ./install.sh
 ```
 
@@ -172,7 +173,7 @@ The last line reads `online as host:<name> (roots: …)`.
 
 More settings (seat limits, letting the desktop app add folders, other
 runtimes) are in the
-[host agent's README](https://github.com/Promises/claudiverse-host-agent-oss#readme).
+[host agent's README](../../agent/host#readme).
 
 ## Next
 

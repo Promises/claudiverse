@@ -1,7 +1,7 @@
 # Server reference
 
 Reference documentation for the Claudiverse server, the Elixir/Phoenix
-application in `claudiverse_server/`. Each page covers one feature: what it
+application in `server/api/`. Each page covers one feature: what it
 is, how it works, its configuration, its interface, and how it fails.
 
 To install and run the server, start with the [setup guide](../../guide/README.md)
@@ -146,13 +146,13 @@ Every route in `router.ex`, and the page that documents it.
 - [Mod reference](../services/mod/README.md)
 - [Web panel reference](../services/web/README.md)
 - [Runners and tools reference](../runners/README.md)
-- [Host agent reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
+- [Host agent reference](../host-agent/README.md)
 - [Android app](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/README.md)
 - [Mac app](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/README.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/endpoint.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/user_socket.ex`
-- `claudiverse_server/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/endpoint.ex`
+- `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
+- `server/api/lib/claudiverse_server/application.ex`

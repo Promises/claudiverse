@@ -23,15 +23,15 @@ The server is the policy source. A seat's `cv-mcp` asks `GET /api/seats/whoami` 
 | Level | Stored value | Role | Meaning |
 |---|---|---|---|
 | basic | `access = "basic"` | `worker` | reporting tools and the shared tools. Paging is separate. |
-| full | `access = "full"` | `orchestrator` | the whole tool set. Paging is separate. |
+| full | `access = "full"` | `agent/tools` | the whole tool set. Paging is separate. |
 | notify (legacy) | `access = "notify"` | `worker` | accepted for the first version of the API. Equivalent to basic tools with paging on (by derivation, see below). Reads back as `access: "basic"`. |
 | derived | `access = null` | by origin | see the diagram |
 
 Tool level (`role/1`):
 
 1. `access` is `basic` or `notify`: role `worker`.
-2. `access` is `full`: role `orchestrator`.
-3. `access` is null: origin `runner` or `plain` gives `worker`; anything else (`manual`, `spawn`, `profile`, null) gives `orchestrator`. A profile's own role (the board role a profile carries) plays no part. A profile seat is an orchestrator unless its `access` is set.
+2. `access` is `full`: role `agent/tools`.
+3. `access` is null: origin `runner` or `plain` gives `worker`; anything else (`manual`, `spawn`, `profile`, null) gives `agent/tools`. A profile's own role (the board role a profile carries) plays no part. A profile seat is an orchestrator unless its `access` is set.
 
 `level/1` is what the API reports as `access`: `"basic"` if the role is `worker`, else `"full"`. The legacy `notify` level therefore never appears in responses; `access_explicit` tells whether a value is stored.
 
@@ -91,7 +91,7 @@ Server side, every use of the `Access` module in `lib/`:
 
 Not enforced on the server: tool access (`role`/`access`) is not checked by any endpoint. In particular `/api/notify/*` (`NotifyController`: subscribe, send, status, report and so on) checks neither role, access, nor `can_notify`. Its only token-context check is `force: true` on `POST /api/notify/send`, which needs an app or super token (403 `force is app-only`); that is unrelated to seat access. The same goes for the forum, handoff, knowledge and task endpoints. A worker-level seat with the shared token could call them directly; the level only controls which tools its MCP exposes.
 
-Client side (`orchestrator/cv-mcp.mjs`, `orchestrator/cv-policy.mjs`): every tool is registered under a group, and `applyPolicy(role, canNotify)` enables or disables each tool by `allowedGroup(group, role, canNotify)`:
+Client side (`agent/tools/cv-mcp.mjs`, `agent/tools/cv-policy.mjs`): every tool is registered under a group, and `applyPolicy(role, canNotify)` enables or disables each tool by `allowedGroup(group, role, canNotify)`:
 
 | Group | Enabled when | Contents (briefly) |
 |---|---|---|
@@ -218,19 +218,19 @@ Any authenticated token. Query: `claude_session_id=<id>` or `title=<title>` (the
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/sessions/access.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/session.ex`
-- `claudiverse_server/lib/claudiverse_server/human_requests.ex`
-- `claudiverse_server/lib/claudiverse_server/profiles.ex` (`registration_attrs/2`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex` (`create`, `access`, `notify`, `serialize_session`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/seat_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/inbox_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/human_request_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/notify_controller.ex`
-- `claudiverse_server/priv/repo/migrations/20261003001000_add_can_notify_to_sessions.exs`
-- `claudiverse_server/priv/repo/migrations/20261006010000_add_access_to_sessions.exs`
-- `claudiverse_server/priv/repo/migrations/20261006020000_add_notify_grant_to_sessions.exs`
-- orchestrator/cv-mcp.mjs (`applyPolicy`, `resolveSeat`, `refreshPolicy`)
-- orchestrator/cv-policy.mjs
-- `claudiverse_server/test/claudiverse_server_web/seat_access_test.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/seat_controller_test.exs`
+- `server/api/lib/claudiverse_server/sessions/access.ex`
+- `server/api/lib/claudiverse_server/sessions/session.ex`
+- `server/api/lib/claudiverse_server/human_requests.ex`
+- `server/api/lib/claudiverse_server/profiles.ex` (`registration_attrs/2`)
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex` (`create`, `access`, `notify`, `serialize_session`)
+- `server/api/lib/claudiverse_server_web/controllers/seat_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/inbox_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/human_request_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/notify_controller.ex`
+- `server/api/priv/repo/migrations/20261003001000_add_can_notify_to_sessions.exs`
+- `server/api/priv/repo/migrations/20261006010000_add_access_to_sessions.exs`
+- `server/api/priv/repo/migrations/20261006020000_add_notify_grant_to_sessions.exs`
+- agent/tools/cv-mcp.mjs (`applyPolicy`, `resolveSeat`, `refreshPolicy`)
+- agent/tools/cv-policy.mjs
+- `server/api/test/claudiverse_server_web/seat_access_test.exs`
+- `server/api/test/claudiverse_server_web/controllers/seat_controller_test.exs`

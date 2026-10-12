@@ -110,9 +110,9 @@ The 30 s tick is a constant in `AutoResume.Server`.
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/auto_resume.ex`
-- `claudiverse_server/lib/claudiverse_server/auto_resume/server.ex`, `stall.ex`
-- `claudiverse_server/lib/claudiverse_server_web/proxy_plug.ex` (`resume_key/5`, the `stream_*` and `refused` reports), `claudiverse_server/lib/claudiverse_server/proxy/request.ex` (`main_loop?/2`)
-- `claudiverse_server/lib/claudiverse_server/application.ex` (`prep_stop/1`)
-- `claudiverse_server/priv/repo/migrations/20261011180000_create_seat_stalls.exs`
-- Tests: `claudiverse_server/test/claudiverse_server/auto_resume_test.exs`
+- `server/api/lib/claudiverse_server/auto_resume.ex`
+- `server/api/lib/claudiverse_server/auto_resume/server.ex`, `stall.ex`
+- `server/api/lib/claudiverse_server_web/proxy_plug.ex` (`resume_key/5`, the `stream_*` and `refused` reports), `server/api/lib/claudiverse_server/proxy/request.ex` (`main_loop?/2`)
+- `server/api/lib/claudiverse_server/application.ex` (`prep_stop/1`)
+- `server/api/priv/repo/migrations/20261011180000_create_seat_stalls.exs`
+- Tests: `server/api/test/claudiverse_server/auto_resume_test.exs`

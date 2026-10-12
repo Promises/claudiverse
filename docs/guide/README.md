@@ -49,10 +49,9 @@ server `claudiverse.example`; use your server's hostname or IP address instead.
 - A **Claude subscription** (Pro or Max) for each account you add to the pool.
   The machines that run seats need no Claude login of their own.
 
-## The three repositories
+## The repositories
 
 | Repository | What it is | Licence |
 |---|---|---|
-| [claudiverse-oss](https://github.com/Promises/claudiverse-oss) | The server, the web panel, the seat mod and the orchestration tools | MIT |
-| [claudiverse-host-agent-oss](https://github.com/Promises/claudiverse-host-agent-oss) | The per-machine agent that starts seats | MIT |
-| [claudiverse-apps](https://github.com/Promises/claudiverse-apps) | The Mac and Android apps | see its README |
+| [claudiverse](https://github.com/Promises/claudiverse) | Everything you host: the server and the web panel (`server/`), and what each machine installs (`agent/`) | MIT |
+| [claudiverse-apps](https://github.com/Promises/claudiverse-apps) | The Mac and Android apps (optional) | see its README |

@@ -349,7 +349,7 @@ Returns one line per match, `0x<address> [<build>] (current)` or `0x<address> [<
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (the `cv_doc_*`, `cv_address`, `cv_symbol_*` registrations)
-- `orchestrator/cv-core.mjs` (`kbCreate`, `kbGet`, `kbAddRevision`, `kbHistory`, `kbSearch`, `kbAnchor`, `kbRelate`, `kbStale`, `kbCheck`, `kbAddress`, `kbRecordSymbol`, `kbResolveSymbol`, `apiWithError`, `postWithError`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/knowledge_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge.ex` and `knowledge/*.ex`
+- `agent/tools/cv-mcp.mjs` (the `cv_doc_*`, `cv_address`, `cv_symbol_*` registrations)
+- `agent/tools/cv-core.mjs` (`kbCreate`, `kbGet`, `kbAddRevision`, `kbHistory`, `kbSearch`, `kbAnchor`, `kbRelate`, `kbStale`, `kbCheck`, `kbAddress`, `kbRecordSymbol`, `kbResolveSymbol`, `apiWithError`, `postWithError`)
+- `server/api/lib/claudiverse_server_web/controllers/knowledge_controller.ex`
+- `server/api/lib/claudiverse_server/knowledge.ex` and `knowledge/*.ex`

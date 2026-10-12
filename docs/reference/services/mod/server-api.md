@@ -276,13 +276,13 @@ The server also accepts `{"withdraw": true, "request_id": "..."}` on this path; 
 - [Configuration](configuration.md)
 - Server: [Sessions and Rooms](../../server/sessions-and-rooms.md)
 - Runners and tools: [cv-spawn.sh: starting a seat](../../runners/cv-spawn.md)
-- Host agent: [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md)
+- Host agent: [Starting seats](../../host-agent/starting-seats.md)
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/seat_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/inbox_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/hook_controller.ex`
+- `agent/mod/hooks/register.ts`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/seat_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/inbox_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/hook_controller.ex`

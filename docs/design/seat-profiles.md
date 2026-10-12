@@ -17,7 +17,7 @@ bundle of environment variables and CLI flags, then execs a pinned binary:
 - fleets are not declared anywhere the server can read, so the fleet board guesses
   members from titles.
 
-The claudiverse-seat mod (`mods/claudiverse-seat`, verified on stock 2.1.289) now
+The claudiverse-seat mod (`agent/mod`, verified on stock 2.1.289) now
 does everything a seat needs at runtime. What is left is *starting* seats, and that
 is what the scripts do badly.
 
@@ -73,7 +73,7 @@ So there are three kinds of seat, all running the same mod:
 | `machine` | `lorem-mac.local` | a host with an online agent |
 | `folder` | `~/projects/lorem-api` | must be inside that machine's whitelist |
 | `fleet` | `lorem` | declared membership (fleet board) |
-| `role` | `member` / `watcher` / `orchestrator` | shown on the board; `origin` becomes `profile` |
+| `role` | `member` / `watcher` / `agent/tools` | shown on the board; `origin` becomes `profile` |
 | `can_notify` | `true` | may page the operator (`cv_request_human`) |
 | `runtime` | `stock+mod` / `patched` | patched = today's `claude-rel`, the rollback |
 | `model`, `effort` | `claude-opus-5-5[1m]`, `high` | launch flags; the mod can change them live |

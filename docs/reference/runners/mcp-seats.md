@@ -1,6 +1,6 @@
 # cv-mcp: seat, ping and question tools
 
-These are the `cv_*` tools an orchestrator seat uses to watch other seats and act on them: list and resolve seats, subscribe to their activity, read what they just said in bounded amounts, answer their questions, send them prompts, and report or page upward. They are the tools behind the "ping, inspect, act" loop described in [mcp.md](mcp.md). Each is a thin wrapper over a function in `orchestrator/cv-core.mjs`, which calls the Claudiverse server over HTTP or over the session Phoenix websocket.
+These are the `cv_*` tools an orchestrator seat uses to watch other seats and act on them: list and resolve seats, subscribe to their activity, read what they just said in bounded amounts, answer their questions, send them prompts, and report or page upward. They are the tools behind the "ping, inspect, act" loop described in [mcp.md](mcp.md). Each is a thin wrapper over a function in `agent/tools/cv-core.mjs`, which calls the Claudiverse server over HTTP or over the session Phoenix websocket.
 
 ## How it works
 
@@ -369,7 +369,7 @@ Needs `SELF`.
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (tool registration, `answerOutcome`, `applyPolicy`)
-- `orchestrator/cv-core.mjs` (`listSessions`, `resolveSession`, `fetchReplay`, `sendEvent`, `tail`, `questions`, `send`, `answer`, `decline`, `subscribe`, `ack`, `pending`, `report`, `requestHuman`)
-- `orchestrator/cv-policy.mjs`
-- `orchestrator/test/request-human.test.mjs`
+- `agent/tools/cv-mcp.mjs` (tool registration, `answerOutcome`, `applyPolicy`)
+- `agent/tools/cv-core.mjs` (`listSessions`, `resolveSession`, `fetchReplay`, `sendEvent`, `tail`, `questions`, `send`, `answer`, `decline`, `subscribe`, `ack`, `pending`, `report`, `requestHuman`)
+- `agent/tools/cv-policy.mjs`
+- `agent/tools/test/request-human.test.mjs`

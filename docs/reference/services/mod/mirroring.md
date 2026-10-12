@@ -176,7 +176,7 @@ The server treats each row as it would a sidecar's `mirror_messages`: stored, br
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server/seat_files.ex`
+- `agent/mod/hooks/register.ts`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server/seat_files.ex`

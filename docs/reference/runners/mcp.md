@@ -2,7 +2,7 @@
 
 `cv-mcp` is a stdio MCP server that exposes the Claudiverse server as `cv_*` tools to a Claude Code seat. An orchestrator seat uses it to watch other seats, read what they did in bounded amounts, and act on them; worker seats use a restricted subset to report up and to use the shared forum, task and knowledge tools. It is a thin client: every tool calls the server's HTTP API through `cv-core`.
 
-It runs as `node orchestrator/cv-mcp.mjs` (also the package bin `claudiverse-mcp`). Run `npm install` once in `orchestrator/` first: it installs `@modelcontextprotocol/sdk`, and the server also imports `zod`.
+It runs as `node agent/tools/cv-mcp.mjs` (also the package bin `claudiverse-mcp`). Run `npm install` once in `agent/tools/` first: it installs `@modelcontextprotocol/sdk`, and the server also imports `zod`.
 
 ## How it works
 
@@ -72,17 +72,17 @@ So per role:
 |---|---|
 | `worker` | `cv_report` + shared |
 | `delegate` | `cv_report` + `full` + shared; `cv_request_human` with `CLAUDIVERSE_NOTIFY=1`; lifecycle tools with `CLAUDIVERSE_LIFECYCLE=1` |
-| `orchestrator` | `full` + shared (no `cv_report`); `cv_request_human` with `CLAUDIVERSE_NOTIFY=1`; lifecycle tools with `CLAUDIVERSE_LIFECYCLE=1` |
+| `agent/tools` | `full` + shared (no `cv_report`); `cv_request_human` with `CLAUDIVERSE_NOTIFY=1`; lifecycle tools with `CLAUDIVERSE_LIFECYCLE=1` |
 
-Any other non-empty value behaves like `orchestrator` for these guards.
+Any other non-empty value behaves like `agent/tools` for these guards.
 
 **Dynamic mode (`CLAUDIVERSE_ROLE` unset).** Every group is registered, then enabled or disabled by `allowedGroup`:
 
-- Initially, from the environment: role `orchestrator` and `canNotify` = (`CLAUDIVERSE_NOTIFY=1`). So until the server answers, `full` and shared are on, `report` is off, and `notify` is on only with `CLAUDIVERSE_NOTIFY=1`. An unreachable server leaves this in place.
+- Initially, from the environment: role `agent/tools` and `canNotify` = (`CLAUDIVERSE_NOTIFY=1`). So until the server answers, `full` and shared are on, `report` is off, and `notify` is on only with `CLAUDIVERSE_NOTIFY=1`. An unreachable server leaves this in place.
 - Once the server answers `whoami`, the policy becomes the server's `role` (falling back to the initial role if empty) and `can_notify === true`.
 - Then it is refreshed every 60 s, by `claude_session_id` when one is set (a title can change), otherwise by title. A failed or empty answer keeps the last policy. If the seat was not named by `CLAUDIVERSE_SELF` or `CLAUDIVERSE_TITLE`, `SELF` follows a `/rename`; a launcher-named seat keeps its name.
 
-The lifecycle tools are tagged in the shared group (see the caveat below), and they are registered only if `CLAUDIVERSE_LIFECYCLE=1` and the static `ROLE` is not `worker`. In dynamic mode `ROLE` is always the default `orchestrator`, so for a dynamic seat the only condition is `CLAUDIVERSE_LIFECYCLE=1`. Because shared tools are always enabled, a dynamic seat that has `CLAUDIVERSE_LIFECYCLE=1` keeps `cv_spawn`, `cv_stop` and `cv_ps` even when the server says its role is `worker`. The "hard gate" for workers holds only for a static `CLAUDIVERSE_ROLE=worker`.
+The lifecycle tools are tagged in the shared group (see the caveat below), and they are registered only if `CLAUDIVERSE_LIFECYCLE=1` and the static `ROLE` is not `worker`. In dynamic mode `ROLE` is always the default `agent/tools`, so for a dynamic seat the only condition is `CLAUDIVERSE_LIFECYCLE=1`. Because shared tools are always enabled, a dynamic seat that has `CLAUDIVERSE_LIFECYCLE=1` keeps `cv_spawn`, `cv_stop` and `cv_ps` even when the server says its role is `worker`. The "hard gate" for workers holds only for a static `CLAUDIVERSE_ROLE=worker`.
 
 ### The clock
 
@@ -110,7 +110,7 @@ Orchestrator (`orchestrator.mcp.json.example`; the real file also carries `_comm
   "mcpServers": {
     "claudiverse": {
       "command": "node",
-      "args": ["/ABS/PATH/TO/claudiverse/orchestrator/cv-mcp.mjs"],
+      "args": ["/ABS/PATH/TO/claudiverse/agent/tools/cv-mcp.mjs"],
       "env": {
         "CLAUDIVERSE_URL": "http://claudiverse.example:4000",
         "CLAUDIVERSE_TOKEN": "REPLACE_WITH_CLAUDIVERSE_TOKEN",
@@ -128,7 +128,7 @@ Worker (`worker.mcp.json.example`):
   "mcpServers": {
     "claudiverse": {
       "command": "node",
-      "args": ["/ABS/PATH/TO/claudiverse/orchestrator/cv-mcp.mjs"],
+      "args": ["/ABS/PATH/TO/claudiverse/agent/tools/cv-mcp.mjs"],
       "env": {
         "CLAUDIVERSE_URL": "http://claudiverse.example:4000",
         "CLAUDIVERSE_TOKEN": "REPLACE_WITH_CLAUDIVERSE_TOKEN",
@@ -150,7 +150,7 @@ The worker example sets no `CLAUDIVERSE_SELF`; `SELF` comes from the inherited `
 | `CLAUDIVERSE_SELF` | unset | `cv-mcp` | This seat's title. First choice for `SELF`; also stops `/rename` from changing `SELF`. |
 | `CLAUDIVERSE_TITLE` | unset | `cv-mcp` | Second choice for `SELF` (normally set by the launcher); same `/rename` effect. |
 | `CLAUDE_CODE_SESSION_ID` | set by Claude Code | `cv-mcp` | Used to look the seat up on the server (`claude_session_id`) when no title is known, and for the 60 s policy refresh. |
-| `CLAUDIVERSE_ROLE` | unset (dynamic mode) | `cv-mcp` | `worker`, `delegate` or `orchestrator`. When set, the tool set is fixed at startup (static mode). When unset, dynamic mode. |
+| `CLAUDIVERSE_ROLE` | unset (dynamic mode) | `cv-mcp` | `worker`, `delegate` or `agent/tools`. When set, the tool set is fixed at startup (static mode). When unset, dynamic mode. |
 | `CLAUDIVERSE_NOTIFY` | unset | `cv-mcp` | `1` registers `cv_request_human` in static mode (non-worker role) and is the initial `canNotify` in dynamic mode. |
 | `CLAUDIVERSE_LIFECYCLE` | unset | `cv-mcp` | `1` registers `cv_spawn`, `cv_stop`, `cv_ps` (unless `CLAUDIVERSE_ROLE=worker`). See [mcp-lifecycle.md](mcp-lifecycle.md). |
 | `CLAUDIVERSE_SCOPE` | unset | `cv-mcp` (`cv_doc_search`) | Default `scope` for `cv_doc_search` when the call passes none. |
@@ -190,7 +190,7 @@ Most tools return a text result, including their own error messages (for example
 |---|---|---|
 | `error: can't tell which seat this is yet — …` | No `CLAUDIVERSE_SELF` or `CLAUDIVERSE_TITLE`, and the server has no seat registered for this Claude session yet. | Retry shortly: `cv-mcp` asks `whoami` every 2 s for the first 30 attempts, then every 30 s. If it never resolves, check the token and URL, and that the seat's mod has registered. |
 | `SELF` is never resolved and nothing is retried | Neither a title variable nor `CLAUDE_CODE_SESSION_ID` is set, so there is nothing to look up. | Set `CLAUDIVERSE_SELF` or `CLAUDIVERSE_TITLE` in the MCP config. |
-| `cv_report` is missing on an orchestrator | Expected. `report` is registered only for `worker`/`delegate` (static) and disabled for role `orchestrator` (dynamic). | Use a `delegate` role if the seat must both drive and report. |
+| `cv_report` is missing on an orchestrator | Expected. `report` is registered only for `worker`/`delegate` (static) and disabled for role `agent/tools` (dynamic). | Use a `delegate` role if the seat must both drive and report. |
 | `cv_request_human` is missing | In static mode it needs a non-worker role and `CLAUDIVERSE_NOTIFY=1`; in dynamic mode the server's `can_notify` must be true. | Set the env var, or grant notify to the seat from the apps (`POST /api/sessions/:id/access`, `level` `basic`, `notify`, `full` or null; app tokens only). A dynamic seat picks it up within a minute. |
 | `cv_spawn`, `cv_stop`, `cv_ps` missing | `CLAUDIVERSE_LIFECYCLE=1` is not set, or `CLAUDIVERSE_ROLE=worker`. | Set the variable on the managing seat only. |
 | Tools lack a seat's role change | Dynamic seats refresh every 60 s; static seats never refresh. | Wait a minute, or restart the seat. |
@@ -208,10 +208,10 @@ Most tools return a text result, including their own error messages (for example
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs`
-- `orchestrator/cv-policy.mjs`
-- `orchestrator/test/policy.test.mjs`
-- `orchestrator/orchestrator.mcp.json.example`
-- `orchestrator/worker.mcp.json.example`
-- `orchestrator/package.json`
-- `orchestrator/README.md`
+- `agent/tools/cv-mcp.mjs`
+- `agent/tools/cv-policy.mjs`
+- `agent/tools/test/policy.test.mjs`
+- `agent/tools/orchestrator.mcp.json.example`
+- `agent/tools/worker.mcp.json.example`
+- `agent/tools/package.json`
+- `agent/tools/README.md`

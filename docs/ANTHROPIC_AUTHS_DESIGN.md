@@ -397,7 +397,7 @@ token + all auths cooling -> fail with the earliest cooldown_until, so the
    `vault.ex`, migration `20260911100000`.
 3. ~~Endpoints + per-auth refresh lock~~ — `anthropic_auth_controller.ex`,
    `refresh_lock.ex`, 8 routes.
-4. ~~Panel~~ — `web/src/pages/AccountsPage.tsx` at `/accounts`.
+4. ~~Panel~~ — `server/web/src/pages/AccountsPage.tsx` at `/accounts`.
 5. ~~Runner integration~~ — `cv-spawn.sh` leases and sets
    `CLAUDE_CODE_OAUTH_TOKEN`.
 6. ~~Locate Claude's refresh site~~ — found, and made moot by the env var.

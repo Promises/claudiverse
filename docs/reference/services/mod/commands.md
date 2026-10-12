@@ -172,8 +172,8 @@ Slash text that arrives through the inbox (from `cv_send` or an app) is not trea
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `mods/claudiverse-seat/.claude-plugin/plugin.json`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/session.ex`
+- `agent/mod/hooks/register.ts`
+- `agent/mod/.claude-plugin/plugin.json`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server/sessions.ex`
+- `server/api/lib/claudiverse_server/sessions/session.ex`

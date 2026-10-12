@@ -244,7 +244,7 @@ The `/api/notify/*` routes live in the authenticated `/api` scope and any valid 
 | `cv_send({session, text})` | `POST /api/notify/send`; on `delivered` it also acks that target's pings |
 | `cv_report({text})` | `POST /api/notify/report` |
 
-The orchestrator itself is documented in `orchestrator/README.md`.
+The orchestrator itself is documented in `agent/tools/README.md`.
 
 ## Failure modes and troubleshooting
 
@@ -276,13 +276,13 @@ The orchestrator itself is documented in `orchestrator/README.md`.
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/notifications/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/notify_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/cv_event.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/cv_subscription.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions.ex` (`put_subscription`, `list_subscriptions`, `record_event`)
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex` (`notify_router`, `send_message`, `force_message`, `get_status`)
-- `claudiverse_server/lib/claudiverse_server/forum.ex` (forum and assignment pings)
-- `claudiverse_server/lib/claudiverse_server_web/router.ex` (route table)
-- `orchestrator/cv-core.mjs`, `orchestrator/cv-mcp.mjs` (tool-to-endpoint mapping)
-- Tests: `claudiverse_server/test/claudiverse_server_web/notify_subscribe_test.exs`, `claudiverse_server/test/claudiverse_server_web/controllers/notify_force_test.exs`, `claudiverse_server/test/claudiverse_server/notifications/router_pool_test.exs`, `claudiverse_server/test/claudiverse_server/notifications/router_seat_seen_test.exs`
+- `server/api/lib/claudiverse_server/notifications/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/notify_controller.ex`
+- `server/api/lib/claudiverse_server/sessions/cv_event.ex`
+- `server/api/lib/claudiverse_server/sessions/cv_subscription.ex`
+- `server/api/lib/claudiverse_server/sessions.ex` (`put_subscription`, `list_subscriptions`, `record_event`)
+- `server/api/lib/claudiverse_server/sessions/room.ex` (`notify_router`, `send_message`, `force_message`, `get_status`)
+- `server/api/lib/claudiverse_server/forum.ex` (forum and assignment pings)
+- `server/api/lib/claudiverse_server_web/router.ex` (route table)
+- `agent/tools/cv-core.mjs`, `agent/tools/cv-mcp.mjs` (tool-to-endpoint mapping)
+- Tests: `server/api/test/claudiverse_server_web/notify_subscribe_test.exs`, `server/api/test/claudiverse_server_web/controllers/notify_force_test.exs`, `server/api/test/claudiverse_server/notifications/router_pool_test.exs`, `server/api/test/claudiverse_server/notifications/router_seat_seen_test.exs`

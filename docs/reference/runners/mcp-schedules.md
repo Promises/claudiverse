@@ -126,7 +126,7 @@ Statuses: `delivered`, `queued` (the seat was busy), `waiting_for_seat` (no seat
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (the tool registrations)
-- `orchestrator/cv-schedules.mjs` (the wording of answers and refusals)
-- `orchestrator/cv-core.mjs` (`scheduleAdd`, `scheduleList`, `scheduleGet`, `scheduleUpdate`, `scheduleRemove`, `scheduleRuns`)
-- Test: `orchestrator/test/schedules.test.mjs`
+- `agent/tools/cv-mcp.mjs` (the tool registrations)
+- `agent/tools/cv-schedules.mjs` (the wording of answers and refusals)
+- `agent/tools/cv-core.mjs` (`scheduleAdd`, `scheduleList`, `scheduleGet`, `scheduleUpdate`, `scheduleRemove`, `scheduleRuns`)
+- Test: `agent/tools/test/schedules.test.mjs`

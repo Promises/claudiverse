@@ -80,7 +80,7 @@ Not on `clear` and `resume`: after a `/clear` or an in-session resume the Claude
 
 ### What the server does with it
 
-Confirmed in `claudiverse_server`:
+Confirmed in `server/api`:
 
 - A mirrored message of type `session_ended` ends the session at once: the session row is set to `stopped` (to `crashed` if `exit_code` is a non-zero integer, which the mod never sends), viewers receive a `session_ended` event with that exit code, and the room's inbox liveness is cleared. The server logs `Session <id> ended by its seat (<reason>)`.
 - Without that row, a seat that has no WebSocket (an inbox-polled seat, which is what this mod is) is kept alive by its inbox poll. The room checks every 60 s (`@default_liveness_ms`) and stops the session after 3 consecutive checks (`@inbox_miss_limit`) with no live poll, logging `Inbox poll gone for session <id>; stopping it`. That is the roughly 3 minutes in the comment. Any mirrored message also counts as a sign of life for such a seat, so a seat that is still mirroring is not stopped for a paused poll.
@@ -127,6 +127,6 @@ There are no settings for outage behaviour; the timings are constants in the mod
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/inbox_controller.ex`
+- `agent/mod/hooks/register.ts`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server_web/controllers/inbox_controller.ex`

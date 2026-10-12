@@ -178,13 +178,13 @@ To check a snapshot before relying on it, open it with `sqlite3` and run `PRAGMA
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/knowledge/backup.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/custodian.ex`
-- `claudiverse_server/lib/mix/tasks/claudiverse.kb.snapshot.ex`
-- `claudiverse_server/lib/mix/tasks/claudiverse.kb.export.ex`
-- `claudiverse_server/lib/mix/tasks/claudiverse.kb.restore.ex`
-- `claudiverse_server/lib/mix/tasks/claudiverse.kb.verify_mirror.ex`
-- `claudiverse_server/lib/claudiverse_server/release.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/knowledge_controller.ex` (`health`)
-- `claudiverse_server/config/runtime.exs`
-- `claudiverse_server/test/claudiverse_server/kb_snapshot_test.exs`, `custodian_test.exs`, `kb_mirror_test.exs`
+- `server/api/lib/claudiverse_server/knowledge/backup.ex`
+- `server/api/lib/claudiverse_server/knowledge/custodian.ex`
+- `server/api/lib/mix/tasks/claudiverse.kb.snapshot.ex`
+- `server/api/lib/mix/tasks/claudiverse.kb.export.ex`
+- `server/api/lib/mix/tasks/claudiverse.kb.restore.ex`
+- `server/api/lib/mix/tasks/claudiverse.kb.verify_mirror.ex`
+- `server/api/lib/claudiverse_server/release.ex`
+- `server/api/lib/claudiverse_server_web/controllers/knowledge_controller.ex` (`health`)
+- `server/api/config/runtime.exs`
+- `server/api/test/claudiverse_server/kb_snapshot_test.exs`, `custodian_test.exs`, `kb_mirror_test.exs`

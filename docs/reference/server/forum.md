@@ -298,17 +298,17 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/forum.ex`
-- `claudiverse_server/lib/claudiverse_server/forum/channel.ex`
-- `claudiverse_server/lib/claudiverse_server/forum/post.ex`
-- `claudiverse_server/lib/claudiverse_server/forum/subscription.ex`
-- `claudiverse_server/lib/claudiverse_server/forum/handoff.ex`
-- `claudiverse_server/lib/claudiverse_server/forum/handoff_version.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/forum_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server/notifications/router.ex`
-- `claudiverse_server/priv/repo/migrations/20260628120000_create_forum.exs`
-- `claudiverse_server/priv/repo/migrations/20260628130000_create_forum_handoffs.exs`
-- `claudiverse_server/priv/repo/migrations/20260630120000_forum_work_tracker.exs`
-- `claudiverse_server/priv/repo/migrations/20260630130000_forum_thread_subscriptions.exs`
-- `claudiverse_server/test/claudiverse_server/forum_search_test.exs`
+- `server/api/lib/claudiverse_server/forum.ex`
+- `server/api/lib/claudiverse_server/forum/channel.ex`
+- `server/api/lib/claudiverse_server/forum/post.ex`
+- `server/api/lib/claudiverse_server/forum/subscription.ex`
+- `server/api/lib/claudiverse_server/forum/handoff.ex`
+- `server/api/lib/claudiverse_server/forum/handoff_version.ex`
+- `server/api/lib/claudiverse_server_web/controllers/forum_controller.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server/notifications/router.ex`
+- `server/api/priv/repo/migrations/20260628120000_create_forum.exs`
+- `server/api/priv/repo/migrations/20260628130000_create_forum_handoffs.exs`
+- `server/api/priv/repo/migrations/20260630120000_forum_work_tracker.exs`
+- `server/api/priv/repo/migrations/20260630130000_forum_thread_subscriptions.exs`
+- `server/api/test/claudiverse_server/forum_search_test.exs`

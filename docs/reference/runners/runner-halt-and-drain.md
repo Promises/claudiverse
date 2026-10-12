@@ -172,5 +172,5 @@ rm -f ~/.claudiverse/drain/lorem-w4     # cancel, if the runner has not yet seen
 
 ## Source
 
-- `orchestrator/cv-runner.mjs` (HALT comment block, `halted`, `haltBindsMe`, `drainIfAsked`, `DRAIN_FILE`, main loop)
-- `orchestrator/cv-core.mjs` (`HALT_CHANNEL`, `HALT_WINDOW`, `HALT_SCOPE_ALL`, `HALT_SCOPE_TOKEN`, `haltBindsFleet`, `isLiveHalt`)
+- `agent/tools/cv-runner.mjs` (HALT comment block, `halted`, `haltBindsMe`, `drainIfAsked`, `DRAIN_FILE`, main loop)
+- `agent/tools/cv-core.mjs` (`HALT_CHANNEL`, `HALT_WINDOW`, `HALT_SCOPE_ALL`, `HALT_SCOPE_TOKEN`, `haltBindsFleet`, `isLiveHalt`)

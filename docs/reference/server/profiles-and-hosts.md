@@ -120,7 +120,7 @@ Fields (everything except `id`, `last_start` and the timestamps is writable):
 | `machine` | string | required | same character set and length as `name`; the host name |
 | `folder` | string | required | must start with `/` |
 | `fleet` | string or null | null | same format as `name` |
-| `role` | string | `member` | one of `member`, `watcher`, `orchestrator` |
+| `role` | string | `member` | one of `member`, `watcher`, `agent/tools` |
 | `can_notify` | boolean | false | |
 | `runtime` | string | `stock+mod` | `A-Za-z0-9.+_-`, 1-64 characters; a name the agent knows |
 | `model` | string or null | null | free text |
@@ -362,22 +362,22 @@ Both app or super token only (403 `adopting seats is app-only`); 404 `Not found`
 - [Configuration](configuration.md), [Auth](auth.md) (token contexts `api`, `app`, `super`, `host:<name>`), [Tasks and runners](tasks-and-runners.md), [Forum](forum.md), [Account pool](account-pool.md) (`pooled` profiles).
 - Guide: [3. A machine for seats](../../guide/3-machine.md) (installing the host agent), [4. Your first seat](../../guide/4-first-seat.md), [6. Troubleshooting](../../guide/6-troubleshooting.md).
 - Runners and tools: [cv-mcp: lifecycle tools](../runners/mcp-lifecycle.md)
-- Host agent: [Adopting a hand-started seat](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/adopt.md), [The host channel](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/channel.md), [Roots and folder browsing](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/roots.md), [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md), [Folder trust and first-run setup](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/trust-and-setup.md)
+- Host agent: [Adopting a hand-started seat](../host-agent/adopt.md), [The host channel](../host-agent/channel.md), [Roots and folder browsing](../host-agent/roots.md), [Starting seats](../host-agent/starting-seats.md), [Folder trust and first-run setup](../host-agent/trust-and-setup.md)
 - Android: [New seat (spawning a seat)](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/new-seat.md), [Seat profiles](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/profiles.md)
 - Mac: [Adopt](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/adopt.md), [New seat](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/new-seat.md), [Profiles](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/profiles.md), [Settings](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/settings.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/hosts.ex`
-- `claudiverse_server/lib/claudiverse_server/profiles.ex`
-- `claudiverse_server/lib/claudiverse_server/profiles/profile.ex`
-- `claudiverse_server/lib/claudiverse_server/adopt.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/host_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/operator_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/user_socket.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/host_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/profile_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/adopt_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts.ex` (host tokens, token powers)
-- `claudiverse_server/lib/claudiverse_server/notifications/router.ex` (rename)
-- `claudiverse_server/test/claudiverse_server_web/host_test.exs,` profile_test.exs, adopt_test.exs
+- `server/api/lib/claudiverse_server/hosts.ex`
+- `server/api/lib/claudiverse_server/profiles.ex`
+- `server/api/lib/claudiverse_server/profiles/profile.ex`
+- `server/api/lib/claudiverse_server/adopt.ex`
+- `server/api/lib/claudiverse_server_web/channels/host_channel.ex`
+- `server/api/lib/claudiverse_server_web/channels/operator_channel.ex`
+- `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
+- `server/api/lib/claudiverse_server_web/controllers/host_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/profile_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/adopt_controller.ex`
+- `server/api/lib/claudiverse_server/accounts.ex` (host tokens, token powers)
+- `server/api/lib/claudiverse_server/notifications/router.ex` (rename)
+- `server/api/test/claudiverse_server_web/host_test.exs`, `profile_test.exs`, `adopt_test.exs`

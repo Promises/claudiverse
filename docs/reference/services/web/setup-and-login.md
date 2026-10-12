@@ -4,14 +4,14 @@ The web panel has two public pages, `/setup` and `/login`, and everything else r
 
 ## How it works
 
-Routing is in `web/src/App.tsx`. Two wrappers guard the routes:
+Routing is in `server/web/src/App.tsx`. Two wrappers guard the routes:
 
 - `GuestRoute` wraps `/login` and `/setup`. When a user is signed in it redirects to `/`.
 - `ProtectedRoute` wraps `/`, `/forum`, `/accounts` and `/sessions/:id`. When there is no user it redirects to `/login`.
 
 Both wrappers render nothing while `AuthContext` is still loading, so there is no flash of the wrong page.
 
-`AuthContext` (`web/src/contexts/AuthContext.tsx`) holds `user`, `token` and `loading`:
+`AuthContext` (`server/web/src/contexts/AuthContext.tsx`) holds `user`, `token` and `loading`:
 
 1. On load it reads the token from `localStorage` under the key `token`.
 2. If a token exists it calls `GET /api/me`. On success the returned user is stored. On any failure (an expired or revoked token, but also a network error) the token is removed from `localStorage` and the visitor is treated as signed out.
@@ -50,7 +50,7 @@ Sign-up is closed for good once any user exists, whether that user came from `/s
 
 ### Why the panel asks for scope `app`
 
-Sign-in takes a `scope` of `api` (the server default), `app` or `super`. The panel always sends `scope: "app"`. The comment in `web/src/api/auth.ts` gives the reason: an `app` token may allow a seat's permission prompt, while an `api` token (the kind seats and runners carry) may not. The server's `Accounts` module describes `app` as the operator's app, the only caller allowed to force a message into a busy seat, and `api` as the token seats and the fleet share. A panel signed in with an `api` token could not answer permission prompts, so the scope is part of the request, not a detail. See [Permissions and questions](permissions-and-questions.md).
+Sign-in takes a `scope` of `api` (the server default), `app` or `super`. The panel always sends `scope: "app"`. The comment in `server/web/src/api/auth.ts` gives the reason: an `app` token may allow a seat's permission prompt, while an `api` token (the kind seats and runners carry) may not. The server's `Accounts` module describes `app` as the operator's app, the only caller allowed to force a message into a busy seat, and `api` as the token seats and the fleet share. A panel signed in with an `api` token could not answer permission prompts, so the scope is part of the request, not a detail. See [Permissions and questions](permissions-and-questions.md).
 
 ### The `client` field
 
@@ -104,7 +104,7 @@ Response, `200`:
 { "token": "<token>", "scope": "app", "user": { "id": 1, "email": "you@example.com" } }
 ```
 
-The `/setup` form has three fields (email, password, setup code). Its hint under the code field reads: "It is in the server's log: `docker compose -f compose.prod.yml logs server`". The form links to `/login` for visitors who already have an account.
+The `/setup` form has three fields (email, password, setup code). Its hint under the code field reads: "It is in the server's log: `docker compose -f compose.yml logs server`". The form links to `/login` for visitors who already have an account.
 
 ### POST /api/auth/login
 
@@ -142,7 +142,7 @@ Wrong-code and already-closed refusals, and wrong passwords, count as failures f
 ## Failure modes and troubleshooting
 
 - **Redirected to `/setup` but you already have an account.** The panel is talking to a different server or database than you expect. Check `VITE_API_URL`, which is baked into the bundle at build time.
-- **"wrong setup code; use the newest one in the server's log".** Every boot while no account exists makes a new code. Read the latest banner with `docker compose -f compose.prod.yml logs server`.
+- **"wrong setup code; use the newest one in the server's log".** Every boot while no account exists makes a new code. Read the latest banner with `docker compose -f compose.yml logs server`.
 - **"this server already has an account; sign in instead".** Setup is closed for good. Use `/login`. Further accounts are created out of band with `mix claudiverse.register <email> <password>`, not from the panel.
 - **"too many failed sign-ins; try again in N s".** The throttle is per client address. Behind Docker's userland proxy every client may share one address, so failed attempts from anywhere count together (the server's own comment says this). Wait for `retry_after` seconds.
 - **Signed out on every reload.** `GET /api/me` failed, for any reason including a network error, and the token was removed. Check that the server is reachable from the browser at the compiled-in API URL.
@@ -165,14 +165,14 @@ Wrong-code and already-closed refusals, and wrong passwords, count as failures f
 
 ## Source
 
-- `web/src/App.tsx`
-- `web/src/contexts/AuthContext.tsx`
-- `web/src/api/auth.ts`
-- `web/src/pages/LoginPage.tsx`
-- `web/src/pages/SetupPage.tsx`
-- `web/src/hooks/useDocumentTitle.ts`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/auth_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/setup.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts.ex`
-- `claudiverse_server/lib/claudiverse_server/login_throttle.ex`
+- `server/web/src/App.tsx`
+- `server/web/src/contexts/AuthContext.tsx`
+- `server/web/src/api/auth.ts`
+- `server/web/src/pages/LoginPage.tsx`
+- `server/web/src/pages/SetupPage.tsx`
+- `server/web/src/hooks/useDocumentTitle.ts`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/lib/claudiverse_server_web/controllers/auth_controller.ex`
+- `server/api/lib/claudiverse_server/setup.ex`
+- `server/api/lib/claudiverse_server/accounts.ex`
+- `server/api/lib/claudiverse_server/login_throttle.ex`

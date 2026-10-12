@@ -1,6 +1,6 @@
 # Testing the orchestrator
 
-The orchestrator has a small set of local tests in `orchestrator/test/`. They cover the pure decision logic (tool-group policy, validation exemption), one HTTP-status detail in `cv-core.mjs`, and the launch line that `cv-spawn.sh` hands to a seat's shell. They exist to pin behaviours that were wrong once and are cheap to check. They are not a full suite: the runner loop and most of the MCP surface have no automated tests here.
+The orchestrator has a small set of local tests in `agent/tools/test/`. They cover the pure decision logic (tool-group policy, validation exemption), one HTTP-status detail in `cv-core.mjs`, and the launch line that `cv-spawn.sh` hands to a seat's shell. They exist to pin behaviours that were wrong once and are cheap to check. They are not a full suite: the runner loop and most of the MCP surface have no automated tests here.
 
 ## How it works
 
@@ -85,7 +85,7 @@ The temp directory is put first on `PATH` and `cv-spawn.sh` is run with `bash`, 
 
 ## Configuration
 
-There is no `test` script in `orchestrator/package.json` (it has only `bin` and `dependencies`), and no test configuration. The test files import only Node built-ins and the modules under test.
+There is no `test` script in `agent/tools/package.json` (it has only `bin` and `dependencies`), and no test configuration. The test files import only Node built-ins and the modules under test.
 
 | Item | Detail |
 |---|---|
@@ -100,11 +100,11 @@ Run from the repository (worktree) root:
 
 ```bash
 # node:test files
-node --test orchestrator/test/policy.test.mjs orchestrator/test/validation.test.mjs orchestrator/test/spawn.test.mjs
+node --test agent/tools/test/policy.test.mjs agent/tools/test/validation.test.mjs agent/tools/test/spawn.test.mjs
 
 # plain assert scripts
-node orchestrator/test/request-human.test.mjs
-node orchestrator/test/schedules.test.mjs
+node agent/tools/test/request-human.test.mjs
+node agent/tools/test/schedules.test.mjs
 ```
 
 At the time of writing, the `node --test` run reports 12 tests, 12 pass, 0 fail (3 policy, 5 validation, 4 spawn), and the plain script prints its one success line and exits 0. The spawn tests dominate the run time (well under a few seconds in total).
@@ -137,12 +137,12 @@ These parts have no automated tests here: the `cv-runner.mjs` loop (claiming, re
 
 ## Source
 
-- `orchestrator/test/policy.test.mjs`
-- `orchestrator/test/validation.test.mjs`
-- `orchestrator/test/request-human.test.mjs`
-- `orchestrator/test/spawn.test.mjs`
-- `orchestrator/cv-policy.mjs`
-- `orchestrator/cv-validation.mjs`
-- `orchestrator/cv-core.mjs`
-- `orchestrator/cv-spawn.sh`
-- `orchestrator/package.json`
+- `agent/tools/test/policy.test.mjs`
+- `agent/tools/test/validation.test.mjs`
+- `agent/tools/test/request-human.test.mjs`
+- `agent/tools/test/spawn.test.mjs`
+- `agent/tools/cv-policy.mjs`
+- `agent/tools/cv-validation.mjs`
+- `agent/tools/cv-core.mjs`
+- `agent/tools/cv-spawn.sh`
+- `agent/tools/package.json`

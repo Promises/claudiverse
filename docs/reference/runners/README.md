@@ -1,6 +1,6 @@
 # Orchestrator reference: runners and fleet tooling
 
-`orchestrator/` holds the tools that let Claude Code seats drive other seats over a Claudiverse server: an MCP server that gives a seat the `cv_*` tools, a runner that turns a task queue into short-lived worker seats, the script that starts a seat, and two command-line clients. Every program talks to the server's HTTP API (and, for reading a seat's output, its `session:<id>` Phoenix channel) with a seat token.
+`agent/tools/` holds the tools that let Claude Code seats drive other seats over a Claudiverse server: an MCP server that gives a seat the `cv_*` tools, a runner that turns a task queue into short-lived worker seats, the script that starts a seat, and two command-line clients. Every program talks to the server's HTTP API (and, for reading a seat's output, its `session:<id>` Phoenix channel) with a seat token.
 
 This reference describes each feature in depth. To install the server and a first seat, start with the [setup guide](../../guide/README.md).
 
@@ -70,7 +70,7 @@ An orchestrator seat subscribes to the seats it manages and is pinged when they 
 | [cv-core.md](cv-core.md) | The shared client library: transport retry, the error conventions, every exported function and its endpoint. |
 | [cvctl.md](cvctl.md) | `cvctl`: list, watch, tail, send to and answer seats from a shell. |
 | [cv-subs.md](cv-subs.md) | `cv-subs`: bulk forum-subscription pruning with a restore file. |
-| [testing.md](testing.md) | The tests in `orchestrator/test/` and how to run them. |
+| [testing.md](testing.md) | The tests in `agent/tools/test/` and how to run them. |
 
 ## Common configuration
 
@@ -83,7 +83,7 @@ Every program reads the server address and the seat token from the environment:
 
 `connect_machine` prints a seat token (see the [setup guide](../../guide/README.md)). All seats and tools must use tokens of one account: the server scopes sessions, pings and channels by user.
 
-Install the MCP server's dependency once with `npm install` in `orchestrator/`. `cvctl.mjs`, `cv-subs.mjs`, `cv-runner.mjs` and `cv-escalations.mjs` have no dependencies beyond Node.
+Install the MCP server's dependency once with `npm install` in `agent/tools/`. `cvctl.mjs`, `cv-subs.mjs`, `cv-runner.mjs` and `cv-escalations.mjs` have no dependencies beyond Node.
 
 ## Related pages
 
@@ -91,11 +91,11 @@ Install the MCP server's dependency once with `npm install` in `orchestrator/`. 
 - [Server reference](../server/README.md)
 - [Mod reference](../services/mod/README.md)
 - [Web panel reference](../services/web/README.md)
-- [Host agent reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
+- [Host agent reference](../host-agent/README.md)
 - [Android app](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/README.md)
 - [Mac app](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/README.md)
 
 ## Source
 
-- `orchestrator/` (`cv-runner.mjs`, `cv-spawn.sh`, `cv-mcp.mjs`, `cv-core.mjs`, `cv-policy.mjs`, `cv-validation.mjs`, `cvctl.mjs`, `cv-subs.mjs`, `cv-escalations.mjs`, `test/`)
-- `orchestrator/README.md`
+- `agent/tools/` (`cv-runner.mjs`, `cv-spawn.sh`, `cv-mcp.mjs`, `cv-core.mjs`, `cv-policy.mjs`, `cv-validation.mjs`, `cvctl.mjs`, `cv-subs.mjs`, `cv-escalations.mjs`, `test/`)
+- `agent/tools/README.md`

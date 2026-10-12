@@ -142,7 +142,7 @@ The 404-as-value rule matters to callers: a missing handoff is a normal state ("
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (handoff tools, `cv_task_done` and `cv_stop` gates)
-- `orchestrator/cv-core.mjs` (`handoffSet`, `handoffGet`, `handoffList`)
-- `orchestrator/cv-runner.mjs` (reap gate, `readDecline`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/forum_controller.ex` (endpoints, read only for confirmation)
+- `agent/tools/cv-mcp.mjs` (handoff tools, `cv_task_done` and `cv_stop` gates)
+- `agent/tools/cv-core.mjs` (`handoffSet`, `handoffGet`, `handoffList`)
+- `agent/tools/cv-runner.mjs` (reap gate, `readDecline`)
+- `server/api/lib/claudiverse_server_web/controllers/forum_controller.ex` (endpoints, read only for confirmation)

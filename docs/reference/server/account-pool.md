@@ -443,23 +443,23 @@ Body: `code` and `verifier` (required), `state`, `force` (boolean; the string `"
 - Guide: [../../guide/2-accounts.md](../../guide/2-accounts.md), [../../guide/6-troubleshooting.md](../../guide/6-troubleshooting.md).
 - Web panel: [Accounts page](../services/web/accounts.md)
 - Runners and tools: [cv-spawn.sh: starting a seat](../runners/cv-spawn.md)
-- Host agent: [Local relay](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/relay.md)
+- Host agent: [Local relay](../host-agent/relay.md)
 - Android: [Pool tab](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/pool.md)
 - Mac: [Account pool](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/account-pool.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/anthropic_auth.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/assignment.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/oauth.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/vault.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/refresh_lock.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/anthropic_auth_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/operator_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/plugs/auth.ex`
-- `claudiverse_server/lib/claudiverse_server/proxy/credentials.ex`
-- `claudiverse_server/priv/repo/migrations/20260911100000_create_anthropic_auths.exs`
-- `claudiverse_server/priv/repo/migrations/20260914090000_create_anthropic_auth_assignments.exs`
+- `server/api/lib/claudiverse_server/anthropic_auths.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/anthropic_auth.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/assignment.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/oauth.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/vault.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/refresh_lock.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/anthropic_auth_controller.ex`
+- `server/api/lib/claudiverse_server_web/channels/operator_channel.ex`
+- `server/api/lib/claudiverse_server_web/plugs/auth.ex`
+- `server/api/lib/claudiverse_server/proxy/credentials.ex`
+- `server/api/priv/repo/migrations/20260911100000_create_anthropic_auths.exs`
+- `server/api/priv/repo/migrations/20260914090000_create_anthropic_auth_assignments.exs`
 - docs/ANTHROPIC_AUTHS_DESIGN.md (design notes; the code is authoritative)

@@ -238,9 +238,9 @@ All validation errors occur before the tmux session is created, except the last 
 - [Orchestrator reference: runners and fleet tooling](README.md)
 - Server: [The Anthropic account pool](../server/account-pool.md), [The API proxy](../server/api-proxy.md), [Sessions and Rooms](../server/sessions-and-rooms.md)
 - Mod: [Registration](../services/mod/registration.md), [Server API used by the mod](../services/mod/server-api.md)
-- Host agent: [Local relay](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/relay.md), [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md)
+- Host agent: [Local relay](../host-agent/relay.md), [Starting seats](../host-agent/starting-seats.md)
 
 ## Source
 
-- `orchestrator/cv-spawn.sh`
-- `orchestrator/test/spawn.test.mjs`
+- `agent/tools/cv-spawn.sh`
+- `agent/tools/test/spawn.test.mjs`

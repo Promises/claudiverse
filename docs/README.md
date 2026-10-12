@@ -16,9 +16,10 @@ defined once, in the **[glossary](glossary.md)**.
 
 ## The parts
 
-Claudiverse is three repositories. This one holds the server, the web panel,
-the mod and the orchestration tools; the host agent and the apps have their
-own.
+This repository holds everything you host: the server and the web panel
+(`server/`), and what each machine with Claude Code installs (`agent/`): the
+host agent, the mod and the orchestration tools. The Mac and Android apps are
+in [claudiverse-apps](https://github.com/Promises/claudiverse-apps).
 
 | Part | What it is | Reference |
 |---|---|---|
@@ -26,7 +27,7 @@ own.
 | Mod | The claudiverse-seat Claude Code plugin that makes a session a seat | [reference/services/mod/](reference/services/mod/README.md) |
 | Web panel | The browser client | [reference/services/web/](reference/services/web/README.md) |
 | Runners and tools | `cv-runner`, `cv-spawn.sh`, the `cv_*` MCP tools, `cvctl` and `cv-subs` | [reference/runners/](reference/runners/README.md) |
-| Host agent | The per-machine service that starts and stops seats | [claudiverse-host-agent-oss: docs/](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md) |
+| Host agent | The per-machine service that starts and stops seats | [host agent reference](reference/host-agent/README.md) |
 | Android app | The phone client, with its own VPN | [claudiverse-apps: docs/android/](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/README.md) |
 | Mac app | The desktop client, with the fleet board | [claudiverse-apps: docs/mac/](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/README.md) |
 
@@ -49,11 +50,11 @@ How the parts talk to each other:
 |---|---|
 | Install the server, a machine and a first seat | [Setup guide](guide/README.md) |
 | Run the server in production, back it up, upgrade it | [DEPLOY.md](DEPLOY.md), [Deployment](reference/server/deployment.md) |
-| Look up an environment variable or config key | [Server configuration](reference/server/configuration.md), [mod configuration](reference/services/mod/configuration.md), [host agent configuration](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/configuration.md), [runner configuration](reference/runners/README.md#common-configuration) |
+| Look up an environment variable or config key | [Server configuration](reference/server/configuration.md), [mod configuration](reference/services/mod/configuration.md), [host agent configuration](reference/host-agent/configuration.md), [runner configuration](reference/runners/README.md#common-configuration) |
 | Find which page documents an endpoint | [Server route map](reference/server/README.md#route-map), [every call the mod makes](reference/services/mod/server-api.md) |
 | Understand tokens and who may do what | [Accounts, sign-up and tokens](reference/server/auth.md), [Tool levels and paging](reference/server/access-and-notify.md) |
-| Connect a machine | [Guide: a machine for seats](guide/3-machine.md), [host agent install](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/install-and-service.md) |
-| Start seats from profiles | [Profiles and hosts](reference/server/profiles-and-hosts.md), [starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md) |
+| Connect a machine | [Guide: a machine for seats](guide/3-machine.md), [host agent install](reference/host-agent/install-and-service.md) |
+| Start seats from profiles | [Profiles and hosts](reference/server/profiles-and-hosts.md), [starting seats](reference/host-agent/starting-seats.md) |
 | Add Anthropic accounts and understand failover | [Account pool](reference/server/account-pool.md), [API proxy](reference/server/api-proxy.md) |
 | Answer a seat's questions from a phone | [Server: questions and permissions](reference/server/questions-and-permissions.md), [mod: questions and permissions](reference/services/mod/questions-and-permissions.md) |
 | Run a fleet of workers from a task queue | [cv-runner](reference/runners/runner.md), [Tasks and runners](reference/server/tasks-and-runners.md) |

@@ -126,11 +126,11 @@ Messages that are not printed: failed mirror batches, failed registration retrie
 - [Server API](server-api.md)
 - Server: [Accounts, sign-up and tokens](../../server/auth.md), [Configuration](../../server/configuration.md)
 - Runners and tools: [cv-mcp: the claudiverse MCP server (overview)](../../runners/mcp.md)
-- Host agent: [Configuration reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/configuration.md)
+- Host agent: [Configuration reference](../../host-agent/configuration.md)
 
 ## Source
 
-- `mods/claudiverse-seat/hooks/register.ts`
-- `mods/claudiverse-seat/.claude-plugin/plugin.json`
-- `mods/claudiverse-seat/hooks/hooks.json`
-- `mods/claudiverse-seat/tsconfig.json`
+- `agent/mod/hooks/register.ts`
+- `agent/mod/.claude-plugin/plugin.json`
+- `agent/mod/hooks/hooks.json`
+- `agent/mod/tsconfig.json`

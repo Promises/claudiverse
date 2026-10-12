@@ -40,7 +40,7 @@ Two kinds of variable behave differently:
 |---|---|---|---|
 | `SECRET_KEY_BASE` | none; **required in prod** (boot raises without it) | `runtime.exs` (prod) | Phoenix signing/encryption secret. Generate with `mix phx.gen.secret`. Dev and test use fixed values from `dev.exs`/`test.exs`. |
 | `PHX_SERVER` | unset | `runtime.exs` (all envs) | Any value sets `server: true` on the endpoint, so a release starts the HTTP listener. The Docker image sets `PHX_SERVER=true`. |
-| `PHX_HOST` | `example.com` | `runtime.exs` (prod) | Public host name used for URL generation. `compose.prod.yml` defaults it to `localhost`. |
+| `PHX_HOST` | `example.com` | `runtime.exs` (prod) | Public host name used for URL generation. `compose.yml` defaults it to `localhost`. |
 | `PORT` | `4000` | `runtime.exs` (prod), `dev.exs` | Port the HTTP listener binds. In prod it binds all interfaces (`::`). In dev it binds `127.0.0.1`, or `0.0.0.0` when `DATABASE_PATH` is set (the dev container). |
 | `PHX_SCHEME` | `http` | `runtime.exs` (prod) | Scheme of the public URL. Set `https` behind a TLS-terminating reverse proxy. |
 | `PHX_URL_PORT` | value of `PORT` | `runtime.exs` (prod) | Port of the public URL. Set `443` behind a TLS-terminating reverse proxy. |
@@ -52,7 +52,7 @@ Two kinds of variable behave differently:
 
 | Variable | Default | Read in | Meaning |
 |---|---|---|---|
-| `DATABASE_PATH` | **required in prod**; dev: `claudiverse_server/claudiverse_server_dev.db` | `runtime.exs` (prod), `dev.exs`, and at call time by `SeatFiles`, `AppBuilds`, `IncidentLog` | Path of the SQLite database file. The Docker image sets `/data/claudiverse.db`. Its directory also holds `seat-files/`, `app-builds/` and `incidents.jsonl` unless overridden (below). |
+| `DATABASE_PATH` | **required in prod**; dev: `server/api/claudiverse_server_dev.db` | `runtime.exs` (prod), `dev.exs`, and at call time by `SeatFiles`, `AppBuilds`, `IncidentLog` | Path of the SQLite database file. The Docker image sets `/data/claudiverse.db`. Its directory also holds `seat-files/`, `app-builds/` and `incidents.jsonl` unless overridden (below). |
 | `POOL_SIZE` | `5` | `runtime.exs` (prod) | Ecto connection pool size. SQLite allows one writer at a time; keep it small. Pool starvation shows up as a high `queue` time in the slow-query log ([operations.md](operations.md)). |
 | `INCIDENT_LOG` | `incidents.jsonl` beside `DATABASE_PATH` | `IncidentLog` | Path of the append-only 5xx log. If neither this nor `DATABASE_PATH` is set, no incidents are recorded. |
 | `SLOW_QUERY_MS` | `500` | `SlowQueryLog` (at boot, when the handler attaches) | Queries slower than this many ms are logged at `warning`. Non-positive or non-numeric values fall back to 500. |
@@ -82,13 +82,13 @@ See [account-pool.md](account-pool.md).
 
 ### Docker Compose only
 
-`compose.prod.yml` and `.env.example` also define variables the server never
+`compose.yml` and `.env.example` also define variables the server never
 reads itself:
 
 | Variable | Used by | Meaning |
 |---|---|---|
 | `VITE_API_URL` | web image build | The API URL as the browser reaches it, baked into the web panel's JS bundle at build time. |
-| `WEB_PORT` | `compose.prod.yml` | Host port the web panel is published on. |
+| `WEB_PORT` | `compose.yml` | Host port the web panel is published on. |
 
 ## Application config keys
 
@@ -188,7 +188,7 @@ See [auth.md](auth.md).
 
 - **Boot fails with "environment variable DATABASE_PATH is missing" or
   "SECRET_KEY_BASE is missing".** Both are required when `MIX_ENV=prod`. The
-  Docker image sets `DATABASE_PATH`; `compose.prod.yml` refuses to start
+  Docker image sets `DATABASE_PATH`; `compose.yml` refuses to start
   without `SECRET_KEY_BASE` in `.env`.
 - **The account pool says it is unconfigured, or an enrolment fails with
   "AnthropicAuths vault key is not set / not valid base64 / N bytes after
@@ -213,19 +213,19 @@ See [auth.md](auth.md).
 - [../../guide/2-accounts.md](../../guide/2-accounts.md): enrolling accounts
   (needs `CV_VAULT_KEY`).
 - Mod: [Configuration reference](../services/mod/configuration.md)
-- Host agent: [Configuration reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/configuration.md)
+- Host agent: [Configuration reference](../host-agent/configuration.md)
 
 ## Source
 
-- `claudiverse_server/config/config.exs`
-- `claudiverse_server/config/dev.exs`
-- `claudiverse_server/config/prod.exs`
-- `claudiverse_server/config/runtime.exs`
-- `claudiverse_server/config/test.exs`
-- `claudiverse_server/lib/claudiverse_server/application.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/vault.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
-- `claudiverse_server/lib/claudiverse_server/incident_log.ex`
-- `claudiverse_server/lib/claudiverse_server/slow_query_log.ex`
-- `compose.prod.yml`
+- `server/api/config/config.exs`
+- `server/api/config/dev.exs`
+- `server/api/config/prod.exs`
+- `server/api/config/runtime.exs`
+- `server/api/config/test.exs`
+- `server/api/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/vault.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
+- `server/api/lib/claudiverse_server/incident_log.ex`
+- `server/api/lib/claudiverse_server/slow_query_log.ex`
+- `compose.yml`
 - `.env.example`

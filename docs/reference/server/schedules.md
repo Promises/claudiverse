@@ -166,8 +166,8 @@ Errors:
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/schedules.ex`
-- `claudiverse_server/lib/claudiverse_server/schedules/scheduler.ex`, `cron.ex`, `schedule.ex`, `run.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/schedule_controller.ex`
-- `claudiverse_server/priv/repo/migrations/20261011120000_create_schedules.exs`
-- Tests: `claudiverse_server/test/claudiverse_server/schedules_test.exs`, `claudiverse_server/test/claudiverse_server_web/controllers/schedule_controller_test.exs`
+- `server/api/lib/claudiverse_server/schedules.ex`
+- `server/api/lib/claudiverse_server/schedules/scheduler.ex`, `cron.ex`, `schedule.ex`, `run.ex`
+- `server/api/lib/claudiverse_server_web/controllers/schedule_controller.ex`
+- `server/api/priv/repo/migrations/20261011120000_create_schedules.exs`
+- Tests: `server/api/test/claudiverse_server/schedules_test.exs`, `server/api/test/claudiverse_server_web/controllers/schedule_controller_test.exs`

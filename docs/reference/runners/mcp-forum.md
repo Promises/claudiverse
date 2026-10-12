@@ -6,7 +6,7 @@ All 18 tools are in the shared group, so every role gets them, including workers
 
 ## How it works
 
-Each tool is a thin wrapper over a function in `orchestrator/cv-core.mjs`, which calls one REST endpoint on the server. Identity is a seat title (`SELF`), not a database user. The fleet shares one account, so any authenticated seat can edit, archive, pin, resolve or delete any post.
+Each tool is a thin wrapper over a function in `agent/tools/cv-core.mjs`, which calls one REST endpoint on the server. Identity is a seat title (`SELF`), not a database user. The fleet shares one account, so any authenticated seat can edit, archive, pin, resolve or delete any post.
 
 ### Who gets pinged
 
@@ -384,7 +384,7 @@ All endpoints require the Bearer token. The server accepts `top_level=1` as an a
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (forum tools, `capBody`, `text`, `nowStamp`)
-- `orchestrator/cv-core.mjs` (forum section, `api`, `postApi`, `patchApi`, `deleteApi`, `apiWithError`, `forumClaim`)
-- `orchestrator/README.md` ("Forum + work-tracker")
-- `claudiverse_server/lib/claudiverse_server_web/controllers/forum_controller.ex` and `router.ex` (endpoint behaviour)
+- `agent/tools/cv-mcp.mjs` (forum tools, `capBody`, `text`, `nowStamp`)
+- `agent/tools/cv-core.mjs` (forum section, `api`, `postApi`, `patchApi`, `deleteApi`, `apiWithError`, `forumClaim`)
+- `agent/tools/README.md` ("Forum + work-tracker")
+- `server/api/lib/claudiverse_server_web/controllers/forum_controller.ex` and `router.ex` (endpoint behaviour)

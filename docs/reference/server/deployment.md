@@ -8,7 +8,7 @@ other way or diagnose a deployment.
 
 ## What runs
 
-The server is one Elixir release, `claudiverse_server`, with one SQLite
+The server is one Elixir release, `server/api`, with one SQLite
 database file. It is designed to run as a **single node**: Rooms, the seat
 inbox, question holds, seat links, runner slots, the notification queues and
 the host registry all live in memory in that node. Two instances against one
@@ -31,12 +31,12 @@ flowchart LR
   seats["Seats and host agents"] -- "REST, WebSocket, /proxy" --> rel
 ```
 
-The web panel is a separate static build served by nginx (`web/Dockerfile`); it
+The web panel is a separate static build served by nginx (`server/web/Dockerfile`); it
 talks to the API cross-origin. It is not part of the server.
 
 ## The image
 
-`claudiverse_server/Dockerfile` is a two-stage build:
+`server/api/Dockerfile` is a two-stage build:
 
 1. **Build stage** (`elixir:1.19-otp-28-slim`): `mix deps.get --only prod`,
    `mix compile`, `mix release` with `MIX_ENV=prod`.
@@ -57,23 +57,23 @@ It exposes port 4000 and runs `bin/claudiverse_server start`.
 `SECRET_KEY_BASE` must come from the environment; the release refuses to boot
 without it. All variables are listed in [configuration.md](configuration.md).
 
-`claudiverse_server/Dockerfile.dev` is the development image used by the root
-`docker-compose.yml`: it bind-mounts the source and runs
+`server/api/Dockerfile.dev` is the development image used by the root
+`compose.dev.yml`: it bind-mounts the source and runs
 `mix ecto.create && mix ecto.migrate && mix phx.server` on port 4000.
 
 ## Compose stacks
 
 | File | Purpose | Server port | Web |
 |---|---|---|---|
-| `docker-compose.yml` | Development: source mounted, code reloading, `MIX_ENV=dev`, database at `claudiverse_server/data/claudiverse_dev.db` | 4000 | Vite dev server on 5173 |
-| `compose.prod.yml` | Production: built images, named volume `claudiverse_db` at `/data` | `PORT` (default 4000) | nginx on `WEB_PORT` (default 8080) |
+| `compose.dev.yml` | Development: source mounted, code reloading, `MIX_ENV=dev`, database at `server/api/data/claudiverse_dev.db` | 4000 | Vite dev server on 5173 |
+| `compose.yml` | Production: built images, named volume `claudiverse_db` at `/data` | `PORT` (default 4000) | nginx on `WEB_PORT` (default 8080) |
 
-`compose.prod.yml` also:
+`compose.yml` also:
 
 - caps container logs at 3 files of 10 MB each (the json-file driver has no
   limit by default, and the health check alone logs on every probe);
 - health-checks the server with `curl -fsS http://localhost:$PORT/api/health`
-  every 15 s (5 retries, 30 s start period), and starts `web` only once the
+  every 15 s (5 retries, 30 s start period), and starts `server/web` only once the
   server is healthy;
 - passes `CV_VAULT_KEY`, `CV_USAGE_POLL`, `CV_USAGE_POLL_MS` and
   `CV_USAGE_COOLDOWN_PCT` through, so the account pool can be configured from
@@ -108,7 +108,7 @@ sequenceDiagram
   else is up. `GET /api/health` returns `{"status":"ok"}` without auth.
 - While no account exists, `Setup` logs a one-time setup code at `warning`
   level. Find it with
-  `docker compose -f compose.prod.yml logs server | grep -A3 "setup code"`.
+  `docker compose -f compose.yml logs server | grep -A3 "setup code"`.
   See [auth.md](auth.md).
 
 ## Release commands
@@ -118,7 +118,7 @@ A release has no `mix`. Operator tasks are functions in
 only the Repo, so they work beside a running server):
 
 ```bash
-docker compose -f compose.prod.yml exec server bin/claudiverse_server eval \
+docker compose -f compose.yml exec server bin/claudiverse_server eval \
   'ClaudiverseServer.Release.connect_machine("you@example.com", "lorem-mac")'
 ```
 
@@ -193,10 +193,10 @@ Keep `CV_VAULT_KEY` and `SECRET_KEY_BASE` unchanged across upgrades. A new
 |---|---|---|
 | Container exits at boot: `environment variable SECRET_KEY_BASE is missing` | Not set in `.env` | Generate one (`mix phx.gen.secret` or `openssl rand -base64 48`). |
 | Container exits at boot: `DATABASE_PATH is missing` | Running a prod release outside the image without it | Set `DATABASE_PATH`. |
-| Health check never passes | Boot failed (often a migration) or the port is wrong | `docker compose -f compose.prod.yml logs server`. |
+| Health check never passes | Boot failed (often a migration) or the port is wrong | `docker compose -f compose.yml logs server`. |
 | No setup code in the log | An account already exists, or the code scrolled away | Sign in, or issue a new code with `bin/claudiverse_server rpc 'ClaudiverseServer.Setup.issue()'` (works only while no account exists). |
 | Seats all show disconnected right after an upgrade | In-memory state was reset | Wait for seats to reconnect; see [mirror-inbox-liveness.md](mirror-inbox-liveness.md). |
-| Disk filling | Container logs without a cap, or snapshots kept too long | Use the log caps in `compose.prod.yml`; lower `SNAPSHOT_KEEP`. |
+| Disk filling | Container logs without a cap, or snapshots kept too long | Use the log caps in `compose.yml`; lower `SNAPSHOT_KEEP`. |
 
 ## Related pages
 
@@ -210,13 +210,13 @@ Keep `CV_VAULT_KEY` and `SECRET_KEY_BASE` unchanged across upgrades. A new
 
 ## Source
 
-- `claudiverse_server/Dockerfile`
-- `claudiverse_server/Dockerfile.dev`
-- `docker-compose.yml`
-- `compose.prod.yml`
+- `server/api/Dockerfile`
+- `server/api/Dockerfile.dev`
+- `compose.dev.yml`
+- `compose.yml`
 - `.env.example`
-- `claudiverse_server/config/runtime.exs`
-- `claudiverse_server/lib/claudiverse_server/application.ex`
-- `claudiverse_server/lib/claudiverse_server/release.ex`
-- `claudiverse_server/lib/claudiverse_server/setup.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/health_controller.ex`
+- `server/api/config/runtime.exs`
+- `server/api/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server/release.ex`
+- `server/api/lib/claudiverse_server/setup.ex`
+- `server/api/lib/claudiverse_server_web/controllers/health_controller.ex`

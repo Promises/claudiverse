@@ -1,7 +1,7 @@
 # 1. The server
 
 The server is a Phoenix application with an SQLite database, and a web panel
-served by nginx. Both run from `compose.prod.yml`.
+served by nginx. Both run from `compose.yml`.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ served by nginx. Both run from `compose.prod.yml`.
 ## Get the code and configure it
 
 ```sh
-git clone https://github.com/Promises/claudiverse-oss.git claudiverse
+git clone https://github.com/Promises/claudiverse.git claudiverse
 cd claudiverse
 cp .env.example .env
 ```
@@ -34,7 +34,7 @@ Leave the rest as it is.
 ## Start it
 
 ```sh
-docker compose -f compose.prod.yml --env-file .env up -d --build
+docker compose -f compose.yml --env-file .env up -d --build
 ```
 
 The first build takes a few minutes. When it is done, check the API:
@@ -51,7 +51,7 @@ A new server has no account. It prints a one-time **setup code** in its log
 instead:
 
 ```sh
-docker compose -f compose.prod.yml logs server | grep -A3 "setup code"
+docker compose -f compose.yml logs server | grep -A3 "setup code"
 ```
 
 ```

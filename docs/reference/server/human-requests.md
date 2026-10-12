@@ -2,7 +2,7 @@
 
 A human request is a seat asking the operator (the human) to come to it: "I am blocked, I need a decision". The server stores the request, pushes it live to the operator's apps on a Phoenix channel, and marks it resolved when an app says the operator has opened the seat. The apps turn the push into a phone notification; the server itself sends nothing to the phone.
 
-The seat side is the MCP tool `cv_request_human` in `orchestrator/cv-mcp.mjs`, which calls `POST /api/human_requests`. For what the apps do with it, see [the apps guide](../../guide/5-apps.md).
+The seat side is the MCP tool `cv_request_human` in `agent/tools/cv-mcp.mjs`, which calls `POST /api/human_requests`. For what the apps do with it, see [the apps guide](../../guide/5-apps.md).
 
 ## How it works
 
@@ -182,12 +182,12 @@ Events pushed to the client:
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/human_requests.ex`
-- `claudiverse_server/lib/claudiverse_server/human_requests/human_request.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/human_request_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/operator_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/user_socket.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/access.ex`
-- `claudiverse_server/priv/repo/migrations/20261003000100_create_human_requests.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/human_request_test.exs`
-- orchestrator/cv-mcp.mjs
+- `server/api/lib/claudiverse_server/human_requests.ex`
+- `server/api/lib/claudiverse_server/human_requests/human_request.ex`
+- `server/api/lib/claudiverse_server_web/controllers/human_request_controller.ex`
+- `server/api/lib/claudiverse_server_web/channels/operator_channel.ex`
+- `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
+- `server/api/lib/claudiverse_server/sessions/access.ex`
+- `server/api/priv/repo/migrations/20261003000100_create_human_requests.exs`
+- `server/api/test/claudiverse_server_web/controllers/human_request_test.exs`
+- agent/tools/cv-mcp.mjs

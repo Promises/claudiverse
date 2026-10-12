@@ -1,6 +1,6 @@
 # cv-runner: slots
 
-`cv-runner` (`orchestrator/cv-runner.mjs`) is a slot. You run one per terminal. It claims one task, spawns an ephemeral worker session for it (through `cv-spawn.sh`, in a tmux session), waits for that worker to declare itself done, reaps it, and loops.
+`cv-runner` (`agent/tools/cv-runner.mjs`) is a slot. You run one per terminal. It claims one task, spawns an ephemeral worker session for it (through `cv-spawn.sh`, in a tmux session), waits for that worker to declare itself done, reaps it, and loops.
 
 It exists because nothing else owns a worker's lifecycle. Without a single owner for spawn and reap, orphaned processes and server-side sessions with no process behind them are structural. The slot is also the only party present when a worker's state is destroyed, so it is the place that enforces the "do not reap what you cannot recover" gates.
 
@@ -212,7 +212,7 @@ Forum source (the default), one slot, read-only attach:
 export CLAUDIVERSE_URL=http://claudiverse.example:4000
 export CLAUDIVERSE_TOKEN=...
 
-node orchestrator/cv-runner.mjs \
+node agent/tools/cv-runner.mjs \
   --slot lorem-w1 \
   --channel tasks \
   --workdir ~/work/lorem-w1 \
@@ -223,7 +223,7 @@ node orchestrator/cv-runner.mjs \
 Tasks source in a fleet, with validation routed to a deeper lane so a different slot checks the work:
 
 ```bash
-node orchestrator/cv-runner.mjs \
+node agent/tools/cv-runner.mjs \
   --slot lorem-w4 \
   --task-source tasks \
   --fleet lorem-fleet \
@@ -240,7 +240,7 @@ node orchestrator/cv-runner.mjs \
 One-shot run that handles a single task and exits:
 
 ```bash
-node orchestrator/cv-runner.mjs --slot lorem-w1 --workdir ~/work/lorem-w1 --once
+node agent/tools/cv-runner.mjs --slot lorem-w1 --workdir ~/work/lorem-w1 --once
 ```
 
 Keys while running: `a` attaches to the current worker; Ctrl-C closes the slot (the worker keeps running).
@@ -278,7 +278,7 @@ Keys while running: `a` attaches to the current worker; Ctrl-C closes the slot (
 
 ## Source
 
-- `orchestrator/cv-runner.mjs`
-- `orchestrator/cv-core.mjs`
-- `orchestrator/cv-validation.mjs`
-- `orchestrator/cv-spawn.sh`
+- `agent/tools/cv-runner.mjs`
+- `agent/tools/cv-core.mjs`
+- `agent/tools/cv-validation.mjs`
+- `agent/tools/cv-spawn.sh`

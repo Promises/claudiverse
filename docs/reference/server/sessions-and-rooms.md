@@ -367,20 +367,20 @@ See also [6-troubleshooting](../../guide/6-troubleshooting.md).
 - Mod: [Slash commands](../services/mod/commands.md), [Registration](../services/mod/registration.md), [Server API used by the mod](../services/mod/server-api.md)
 - Web panel: [Dashboard](../services/web/dashboard.md), [The seat view](../services/web/seat-view.md)
 - Runners and tools: [cv-spawn.sh: starting a seat](../runners/cv-spawn.md)
-- Host agent: [Seat control](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/seat-control.md), [Starting seats](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/starting-seats.md)
+- Host agent: [Seat control](../host-agent/seat-control.md), [Starting seats](../host-agent/starting-seats.md)
 - Android: [Seat controls](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/seat-controls.md), [Seat list (the Seats tab)](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/seat-list.md)
 - Mac: [Seat list](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/seat-list.md), [Seat view](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/seat-view.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/sessions.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/session.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/message.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/supervisor.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/ndjson_parser.ex` (currently unreferenced)
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
-- `claudiverse_server/lib/claudiverse_server_web/channels/user_socket.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/session_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/router.ex`
-- `claudiverse_server/test/claudiverse_server_web/channels/session_channel_test.exs`, `test/claudiverse_server_web/controllers/session_controller_test.exs`, `test/claudiverse_server_web/controllers/permission_mode_test.exs`, `test/claudiverse_server/sessions/room_test.exs`
+- `server/api/lib/claudiverse_server/sessions.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `server/api/lib/claudiverse_server/sessions/session.ex`
+- `server/api/lib/claudiverse_server/sessions/message.ex`
+- `server/api/lib/claudiverse_server/sessions/supervisor.ex`
+- `server/api/lib/claudiverse_server/sessions/ndjson_parser.ex` (currently unreferenced)
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
+- `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
+- `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server_web/router.ex`
+- `server/api/test/claudiverse_server_web/channels/session_channel_test.exs`, `test/claudiverse_server_web/controllers/session_controller_test.exs`, `test/claudiverse_server_web/controllers/permission_mode_test.exs`, `test/claudiverse_server/sessions/room_test.exs`

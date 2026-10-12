@@ -1,6 +1,6 @@
 # Data model
 
-Everything the Claudiverse server persists lives in one SQLite database (Ecto, `Ecto.Adapters.SQLite3` via `exqlite`) plus a few files beside it. This page lists every table, the two FTS5 virtual tables, what is deliberately kept only in memory, and the migration history. Column names, types and defaults are copied from the migrations in `claudiverse_server/priv/repo/migrations/`; the Ecto schemas under `claudiverse_server/lib/claudiverse_server/` were cross-checked against them (differences are called out).
+Everything the Claudiverse server persists lives in one SQLite database (Ecto, `Ecto.Adapters.SQLite3` via `exqlite`) plus a few files beside it. This page lists every table, the two FTS5 virtual tables, what is deliberately kept only in memory, and the migration history. Column names, types and defaults are copied from the migrations in `server/api/priv/repo/migrations/`; the Ecto schemas under `server/api/lib/claudiverse_server/` were cross-checked against them (differences are called out).
 
 There are 30 application tables, 2 FTS5 virtual tables (plus SQLite's own FTS5 shadow tables and Ecto's `schema_migrations`).
 
@@ -51,7 +51,7 @@ Purpose: bearer tokens (sign-in tokens, the shared seat token, app and host toke
 | `user_id` | references `users` | not null; `on_delete: :delete_all` |
 | `token` | binary | not null |
 | `context` | string | not null |
-| `label` | string | null (added by `add_label_to_user_tokens`); the client a sign-in token was handed to (`desktop`, `android`, `web`). Null for tokens minted out of band, which a logout or the token list never revokes |
+| `label` | string | null (added by `add_label_to_user_tokens`); the client a sign-in token was handed to (`desktop`, `android`, `server/web`). Null for tokens minted out of band, which a logout or the token list never revokes |
 | `inserted_at` | naive_datetime | not null (no `updated_at`) |
 
 Indexes: `user_id`; unique on `(context, token)`.
@@ -736,7 +736,7 @@ Knowledge snapshots written by `Knowledge.Custodian` go to the directory configu
 
 ## Migrations
 
-Migrations run automatically at boot in a release: `application.ex` starts `Ecto.Migrator` in the supervision tree with `skip: System.get_env("RELEASE_NAME") == nil`. In a release `RELEASE_NAME` is set, so pending migrations run before the endpoint starts; under `mix` (dev/test) it is unset, so they are skipped and you run `mix ecto.migrate` yourself. `Release.migrate/0` exists for running them by hand. All files are in `claudiverse_server/priv/repo/migrations/`, applied in timestamp order:
+Migrations run automatically at boot in a release: `application.ex` starts `Ecto.Migrator` in the supervision tree with `skip: System.get_env("RELEASE_NAME") == nil`. In a release `RELEASE_NAME` is set, so pending migrations run before the endpoint starts; under `mix` (dev/test) it is unset, so they are skipped and you run `mix ecto.migrate` yourself. `Release.migrate/0` exists for running them by hand. All files are in `server/api/priv/repo/migrations/`, applied in timestamp order:
 
 | File | What it does |
 |---|---|
@@ -791,16 +791,16 @@ Notes on running them:
 
 ## Source
 
-- `claudiverse_server/priv/repo/migrations/` (all migration files)
-- `claudiverse_server/lib/claudiverse_server/application.ex`
-- `claudiverse_server/lib/claudiverse_server/release.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts/` (`user.ex`, `user_token.ex`)
-- `claudiverse_server/lib/claudiverse_server/sessions/` (`session.ex`, `message.ex`, `cv_event.ex`, `cv_subscription.ex`)
-- `claudiverse_server/lib/claudiverse_server/forum/` and `forum.ex`
-- `claudiverse_server/lib/claudiverse_server/knowledge/` and `knowledge.ex`
-- `claudiverse_server/lib/claudiverse_server/submissions.ex`, `builds.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks/` and `tasks.ex`
-- `claudiverse_server/lib/claudiverse_server/anthropic_auths/` and `anthropic_auths.ex`
-- `claudiverse_server/lib/claudiverse_server/profiles/`, `human_requests/`, `app_builds/`
-- `claudiverse_server/lib/claudiverse_server/seat_files.ex`, `app_builds.ex`, `incident_log.ex`
-- `claudiverse_server/lib/claudiverse_server/` in-memory processes: `seat_links.ex`, `question_holds.ex`, `seat_inbox.ex`, `login_throttle.ex`, `setup.ex`, `runners.ex`, `hosts.ex`, `notifications/router.ex`, `proxy/`
+- `server/api/priv/repo/migrations/` (all migration files)
+- `server/api/lib/claudiverse_server/application.ex`
+- `server/api/lib/claudiverse_server/release.ex`
+- `server/api/lib/claudiverse_server/accounts/` (`user.ex`, `user_token.ex`)
+- `server/api/lib/claudiverse_server/sessions/` (`session.ex`, `message.ex`, `cv_event.ex`, `cv_subscription.ex`)
+- `server/api/lib/claudiverse_server/forum/` and `forum.ex`
+- `server/api/lib/claudiverse_server/knowledge/` and `knowledge.ex`
+- `server/api/lib/claudiverse_server/submissions.ex`, `builds.ex`
+- `server/api/lib/claudiverse_server/tasks/` and `tasks.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/` and `anthropic_auths.ex`
+- `server/api/lib/claudiverse_server/profiles/`, `human_requests/`, `app_builds/`
+- `server/api/lib/claudiverse_server/seat_files.ex`, `app_builds.ex`, `incident_log.ex`
+- `server/api/lib/claudiverse_server/` in-memory processes: `seat_links.ex`, `question_holds.ex`, `seat_inbox.ex`, `login_throttle.ex`, `setup.ex`, `runners.ex`, `hosts.ex`, `notifications/router.ex`, `proxy/`

@@ -2,19 +2,19 @@
 
 The seat view is the web panel's page for one seat, at the route `/sessions/:id`. It shows the seat's conversation as it streams in, lets you type a message to the seat, interrupt it, and switch its model, and it hosts the permission dialog and question card (documented on [permissions-and-questions.md](permissions-and-questions.md)). It exists so you can watch and steer a Claude Code seat from a browser without being at its terminal.
 
-The page is `web/src/pages/SessionPage.tsx`. The live connection is in `web/src/hooks/useSession.ts` and `web/src/lib/socket.ts`; each message row is drawn by `web/src/components/MessageBubble.tsx`.
+The page is `server/web/src/pages/SessionPage.tsx`. The live connection is in `server/web/src/hooks/useSession.ts` and `server/web/src/lib/socket.ts`; each message row is drawn by `server/web/src/components/MessageBubble.tsx`.
 
 ## How it works
 
 ### Loading the row
 
-On mount the page calls `GET /api/sessions/:id` (through `getSession` in `web/src/api/sessions.ts`, with the stored token as `Authorization: Bearer <token>`). Any non-2xx response, or a network failure, makes the page navigate to `/`. Until the row has loaded the page renders nothing at all. The row supplies the header (title, display title, type) and is the fallback for the model picker.
+On mount the page calls `GET /api/sessions/:id` (through `getSession` in `server/web/src/api/sessions.ts`, with the stored token as `Authorization: Bearer <token>`). Any non-2xx response, or a network failure, makes the page navigate to `/`. Until the row has loaded the page renders nothing at all. The row supplies the header (title, display title, type) and is the fallback for the model picker.
 
 The browser tab title is set by `useDocumentTitle(session?.title)` to `<title> · Claudiverse`. Before the row loads, and after you leave the page, the title is plain `Claudiverse`.
 
 ### The live connection
 
-`getSocket(token)` in `web/src/lib/socket.ts` builds one Phoenix `Socket`. Its URL is `VITE_API_URL` (default `http://localhost:4000`) with the leading `http` replaced by `ws`, plus `/socket`, for example `wss://claudiverse.example/socket`. The token goes in the socket params as `{token}`.
+`getSocket(token)` in `server/web/src/lib/socket.ts` builds one Phoenix `Socket`. Its URL is `VITE_API_URL` (default `http://localhost:4000`) with the leading `http` replaced by `ws`, plus `/socket`, for example `wss://claudiverse.example/socket`. The token goes in the socket params as `{token}`.
 
 The socket is reused unless its `connectionState()` is `"closed"`. The code deliberately does not test `isConnected()`: that is false while the handshake is still in flight, so a second caller during connect used to build a second socket and abandon the first, which stayed open with its channels subscribed, and every broadcast then arrived twice. Two mounts racing the initial connect happen normally (React StrictMode in development, any second subscriber in production).
 
@@ -79,7 +79,7 @@ All pushes go through the current channel reference; if there is no channel, the
 
 ### What the server does with them
 
-From `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`:
+From `server/api/lib/claudiverse_server_web/channels/session_channel.ex`:
 
 - Join. Host tokens are refused (`host tokens cannot join seats`). The `role` param defaults to `observer`. If the signed-in user does not own the session the join fails with `{reason: "not_found"}`. An observer join registers nothing with the room (only `sidecar` joins start the room and register the sidecar); it only schedules a replay.
 - Replay. Right after the join the server pushes `replay`: the earlier conversation of a resumed seat's previous rows, followed by the room's replay buffer, plus the agent data and `pending_permissions` (the prompts asked before you joined).
@@ -176,7 +176,7 @@ Choosing an option sends `send_message` with `{"content": "/model <id>"}`, for e
 - `Disconnected`, with the composer, Stop and model picker disabled. The channel join has not succeeded, failed (see `Join error:` in the browser console; `not_found` means the seat is not yours, and host tokens cannot join), or the server sent `session_ended`. The page does not rejoin after `session_ended`; reload it.
 - Sending while the seat is busy. The server rejects the message (`status: "busy"`), but the page ignores the reply, so the text disappears from the input and nothing is delivered and nothing is shown. Wait for the seat to go idle and send again.
 - Messages that are doubled. Should not happen: the page reuses one socket, removes stale channels, and drops repeated `uuid`s. A message with no `uuid` that is re-delivered would still be duplicated.
-- The model picker does not work on a mod seat. This is a mismatch. The picker sends the text `/model <id>` as an ordinary `send_message`. The server's channel does not filter it, so for a mod seat it is queued in the seat's inbox and handed to the mod's `deliver` function in `mods/claudiverse-seat/hooks/register.ts`. `deliver` runs only `/compact` from the inbox; any other slash command is refused with the seat's log line `claudiverse: /model from the inbox was not run (only /compact is)`, and the seat is reported idle again. The picker therefore does nothing on a mod seat, and since it reflects the latest assistant reply, it keeps showing the old model. The server's own code for the API route (`notify_controller.ex`) likewise lists only `compact` as an inbox command. For a patched sidecar seat the text goes to the sidecar as `remote_input`; this page does not establish whether that runs `/model`.
+- The model picker does not work on a mod seat. This is a mismatch. The picker sends the text `/model <id>` as an ordinary `send_message`. The server's channel does not filter it, so for a mod seat it is queued in the seat's inbox and handed to the mod's `deliver` function in `agent/mod/hooks/register.ts`. `deliver` runs only `/compact` from the inbox; any other slash command is refused with the seat's log line `claudiverse: /model from the inbox was not run (only /compact is)`, and the seat is reported idle again. The picker therefore does nothing on a mod seat, and since it reflects the latest assistant reply, it keeps showing the old model. The server's own code for the API route (`notify_controller.ex`) likewise lists only `compact` as an inbox command. For a patched sidecar seat the text goes to the sidecar as `remote_input`; this page does not establish whether that runs `/model`.
 - Empty-state hint is wrong. This is a mismatch. The hint `claude --claudiverse-server ws://localhost:4000` appears only in `SessionPage.tsx` and in the project's old `PLAN.md` (which describes the flag as a planned addition to a patched Claude CLI). No such flag exists in the seat mod, the orchestrator scripts or the server. Seats are started as described in the [mod pages](../mod/mirroring.md) and by the host agent, not with this flag.
 - Images in a user turn are not shown (see the message table).
 - Pending permission requests do not cause an auto-scroll.
@@ -194,18 +194,18 @@ Choosing an option sends `send_message` with `{"content": "/model <id>"}`, for e
 - [../mod/mirroring.md](../mod/mirroring.md)
 - Server: [HTTP mirror, inbox long-poll and liveness](../../server/mirror-inbox-liveness.md), [Sessions and Rooms](../../server/sessions-and-rooms.md)
 - Runners and tools: [cvctl: the orchestrator CLI](../../runners/cvctl.md), [cv-mcp: seat, ping and question tools](../../runners/mcp-seats.md)
-- Host agent: [Seat control](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/seat-control.md)
+- Host agent: [Seat control](../../host-agent/seat-control.md)
 - Android: [Seat controls](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/seat-controls.md), [Seat view](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/seat-view.md)
 - Mac: [Seat view](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/seat-view.md), [Transcript](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/transcript.md)
 
 ## Source
 
-- `web/src/pages/SessionPage.tsx`
-- `web/src/hooks/useSession.ts`
-- `web/src/hooks/useDocumentTitle.ts`
-- `web/src/lib/socket.ts`
-- `web/src/api/sessions.ts`
-- `web/src/components/MessageBubble.tsx`
-- `claudiverse_server/lib/claudiverse_server_web/channels/session_channel.ex`
-- `claudiverse_server/lib/claudiverse_server/sessions/room.ex`
-- `mods/claudiverse-seat/hooks/register.ts`
+- `server/web/src/pages/SessionPage.tsx`
+- `server/web/src/hooks/useSession.ts`
+- `server/web/src/hooks/useDocumentTitle.ts`
+- `server/web/src/lib/socket.ts`
+- `server/web/src/api/sessions.ts`
+- `server/web/src/components/MessageBubble.tsx`
+- `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
+- `server/api/lib/claudiverse_server/sessions/room.ex`
+- `agent/mod/hooks/register.ts`

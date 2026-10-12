@@ -294,6 +294,6 @@ Nothing is mirrored into the knowledge store for rulings.
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs`: the LEDGER section (`REL`, `clip`, `relationOf`) and the four tools
-- `orchestrator/cv-core.mjs`: `forumPost`, `forumGet`, `forumSetStatus`, `kbCreate`, `kbRelate`, `postApi`, `postWithError`
-- `claudiverse_server/lib/claudiverse_server/knowledge/ledger_import.ex`: the importer
+- `agent/tools/cv-mcp.mjs`: the LEDGER section (`REL`, `clip`, `relationOf`) and the four tools
+- `agent/tools/cv-core.mjs`: `forumPost`, `forumGet`, `forumSetStatus`, `kbCreate`, `kbRelate`, `postApi`, `postWithError`
+- `server/api/lib/claudiverse_server/knowledge/ledger_import.ex`: the importer

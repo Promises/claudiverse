@@ -1,7 +1,7 @@
 # Web panel reference
 
 The web panel is the browser app for watching and steering seats: a Vite,
-React and TypeScript single-page app in `web/`, served as static files by nginx.
+React and TypeScript single-page app in `server/web/`, served as static files by nginx.
 It signs in against the server's REST API, lists your seats, and opens a seat's
 conversation live over a Phoenix channel, where you can send it messages,
 interrupt it, switch its model, and answer its permission prompts and
@@ -74,13 +74,13 @@ visitor to `/login` or `/setup` is sent to `/`. Any other path renders nothing.
 - [Server reference](../../server/README.md)
 - [Mod reference](../mod/README.md)
 - [Runners and tools reference](../../runners/README.md)
-- [Host agent reference](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/README.md)
+- [Host agent reference](../../host-agent/README.md)
 - [Android app](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/README.md)
 - [Mac app](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/README.md)
 - [Deployment runbook](../../../DEPLOY.md)
 
 ## Source
 
-- `web/src/App.tsx`, `web/src/main.tsx`
-- `web/src/pages/`, `web/src/components/`
-- `web/src/api/`, `web/src/hooks/`, `web/src/lib/`, `web/src/contexts/`
+- `server/web/src/App.tsx`, `server/web/src/main.tsx`
+- `server/web/src/pages/`, `server/web/src/components/`
+- `server/web/src/api/`, `server/web/src/hooks/`, `server/web/src/lib/`, `server/web/src/contexts/`

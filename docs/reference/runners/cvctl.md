@@ -2,12 +2,12 @@
 
 `cvctl` is a small command-line client for the Claudiverse server's observer protocol. From a shell, a script or a Claude seat that runs Bash, it lists sessions, watches a seat's mirrored message stream, injects prompts into a seat, answers a seat's `AskUserQuestion`, and manages ping subscriptions. It is the shell counterpart of the `cv_*` MCP tools ([mcp.md](mcp.md)).
 
-It has zero dependencies. It needs a Node with global `fetch` and global `WebSocket`. The file header says "Node 24 ships global fetch + global WebSocket"; `orchestrator/README.md` says "Node 22+". Use Node 24 or newer, the stricter of the two; the code does not check the version.
+It has zero dependencies. It needs a Node with global `fetch` and global `WebSocket`. The file header says "Node 24 ships global fetch + global WebSocket"; `agent/tools/README.md` says "Node 22+". Use Node 24 or newer, the stricter of the two; the code does not check the version.
 
-It is a single file, `orchestrator/cvctl.mjs`, run as:
+It is a single file, `agent/tools/cvctl.mjs`, run as:
 
 ```bash
-node orchestrator/cvctl.mjs <command> …
+node agent/tools/cvctl.mjs <command> …
 ```
 
 The package exposes it as the bin `cvctl`, so after a package-level install `cvctl <command> …` is equivalent.
@@ -165,19 +165,19 @@ These manage the server's ping queue for an orchestrator whose title is `<self>`
 export CLAUDIVERSE_URL=http://claudiverse.example:4000
 export CLAUDIVERSE_TOKEN=<seat token>
 
-node orchestrator/cvctl.mjs list
+node agent/tools/cvctl.mjs list
 #   12  running   lorem-w1
 #   13  stopped   lorem-w2
 
-node orchestrator/cvctl.mjs resolve lorem-w1              # 12
-node orchestrator/cvctl.mjs tail '#12' --limit 30
-node orchestrator/cvctl.mjs watch lorem-w1 --json
-node orchestrator/cvctl.mjs send lorem-w1 "read handoff/GUIDELINES.md and start"
-node orchestrator/cvctl.mjs questions lorem-w1
-node orchestrator/cvctl.mjs answer lorem-w1 "go with option 2"
-node orchestrator/cvctl.mjs subscribe lorem-orchestrator --watch lorem-w1,lorem-w2
-node orchestrator/cvctl.mjs pending lorem-orchestrator
-node orchestrator/cvctl.mjs ack lorem-orchestrator --session lorem-w1
+node agent/tools/cvctl.mjs resolve lorem-w1              # 12
+node agent/tools/cvctl.mjs tail '#12' --limit 30
+node agent/tools/cvctl.mjs watch lorem-w1 --json
+node agent/tools/cvctl.mjs send lorem-w1 "read handoff/GUIDELINES.md and start"
+node agent/tools/cvctl.mjs questions lorem-w1
+node agent/tools/cvctl.mjs answer lorem-w1 "go with option 2"
+node agent/tools/cvctl.mjs subscribe lorem-orchestrator --watch lorem-w1,lorem-w2
+node agent/tools/cvctl.mjs pending lorem-orchestrator
+node agent/tools/cvctl.mjs ack lorem-orchestrator --session lorem-w1
 ```
 
 ### Orchestration conventions
@@ -185,11 +185,11 @@ node orchestrator/cvctl.mjs ack lorem-orchestrator --session lorem-w1
 A prompt you inject comes back through the mirror as `type: "user"`. React only to `assistant` and `turn_complete`, and ignore `user` and `system`; otherwise the orchestrator reacts to its own input. `turn_complete` is emitted once when a top-level turn finishes (subagent turns do not emit it). A file the seat writes is the most robust done signal; use it together with `turn_complete`. Relay example:
 
 ```bash
-node orchestrator/cvctl.mjs watch lorem-w2 --json | while read -r line; do
+node agent/tools/cvctl.mjs watch lorem-w2 --json | while read -r line; do
   case "$line" in
     *'"type":"turn_complete"'*)
       if [ -f handoff/GUIDELINES.md ]; then
-        node orchestrator/cvctl.mjs send lorem-w1 "lorem-w2 posted handoff/GUIDELINES.md — read it and begin."
+        node agent/tools/cvctl.mjs send lorem-w1 "lorem-w2 posted handoff/GUIDELINES.md — read it and begin."
         break
       fi ;;
   esac
@@ -227,5 +227,5 @@ Because `watch` replays the buffer first, an old `turn_complete` in the replay c
 
 ## Source
 
-- `orchestrator/cvctl.mjs`
-- `orchestrator/README.md` (sections 3, 4 and Protocol notes)
+- `agent/tools/cvctl.mjs`
+- `agent/tools/README.md` (sections 3, 4 and Protocol notes)

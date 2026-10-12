@@ -349,24 +349,24 @@ In a built release there is no `mix`. Use `bin/claudiverse_server eval` (it star
 - Mod: [Configuration reference](../services/mod/configuration.md)
 - Web panel: [Setup, login and the session token](../services/web/setup-and-login.md)
 - Runners and tools: [cv-mcp: the claudiverse MCP server (overview)](../runners/mcp.md)
-- Host agent: [Installing and running the host agent as a service](https://github.com/Promises/claudiverse-host-agent-oss/blob/main/docs/reference/install-and-service.md)
+- Host agent: [Installing and running the host agent as a service](../host-agent/install-and-service.md)
 - Android: [Connecting to a server](https://github.com/Promises/claudiverse-apps/blob/main/docs/android/connecting.md)
 - Mac: [Connecting](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/connecting.md), [Settings](https://github.com/Promises/claudiverse-apps/blob/main/docs/mac/settings.md)
 
 ## Source
 
-- `claudiverse_server/lib/claudiverse_server/accounts.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts/user.ex`
-- `claudiverse_server/lib/claudiverse_server/accounts/user_token.ex`
-- `claudiverse_server/lib/claudiverse_server/setup.ex`
-- `claudiverse_server/lib/claudiverse_server/login_throttle.ex`
-- `claudiverse_server/lib/claudiverse_server/release.ex`
-- `claudiverse_server/lib/mix/tasks/register.ex`
-- `claudiverse_server/lib/claudiverse_server_web/plugs/auth.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/auth_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/token_controller.ex`
-- `claudiverse_server/lib/claudiverse_server_web/controllers/host_controller.ex` (host token minting)
-- `claudiverse_server/lib/claudiverse_server_web/channels/user_socket.ex`
-- `claudiverse_server/priv/repo/migrations/20260331202923_create_users.exs`
-- `claudiverse_server/priv/repo/migrations/20261004020000_add_label_to_user_tokens.exs`
-- `claudiverse_server/test/claudiverse_server_web/controllers/{auth_controller,setup,super_token}_test.exs`
+- `server/api/lib/claudiverse_server/accounts.ex`
+- `server/api/lib/claudiverse_server/accounts/user.ex`
+- `server/api/lib/claudiverse_server/accounts/user_token.ex`
+- `server/api/lib/claudiverse_server/setup.ex`
+- `server/api/lib/claudiverse_server/login_throttle.ex`
+- `server/api/lib/claudiverse_server/release.ex`
+- `server/api/lib/mix/tasks/register.ex`
+- `server/api/lib/claudiverse_server_web/plugs/auth.ex`
+- `server/api/lib/claudiverse_server_web/controllers/auth_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/token_controller.ex`
+- `server/api/lib/claudiverse_server_web/controllers/host_controller.ex` (host token minting)
+- `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
+- `server/api/priv/repo/migrations/20260331202923_create_users.exs`
+- `server/api/priv/repo/migrations/20261004020000_add_label_to_user_tokens.exs`
+- `server/api/test/claudiverse_server_web/controllers/{auth_controller,setup,super_token}_test.exs`

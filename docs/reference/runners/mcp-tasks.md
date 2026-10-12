@@ -358,8 +358,8 @@ Other symptoms:
 
 ## Source
 
-- `orchestrator/cv-mcp.mjs` (the eight task tool registrations)
-- `orchestrator/cv-core.mjs` (`taskCreate`, `taskList`, `taskShow`, `taskReady`, `taskDep`, `taskHealth`, `taskComplete`, `taskProgress`, `apiWithError`, `postWithError`)
-- `claudiverse_server/lib/claudiverse_server_web/controllers/task_controller.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks.ex`
-- `claudiverse_server/lib/claudiverse_server/tasks/task.ex`
+- `agent/tools/cv-mcp.mjs` (the eight task tool registrations)
+- `agent/tools/cv-core.mjs` (`taskCreate`, `taskList`, `taskShow`, `taskReady`, `taskDep`, `taskHealth`, `taskComplete`, `taskProgress`, `apiWithError`, `postWithError`)
+- `server/api/lib/claudiverse_server_web/controllers/task_controller.ex`
+- `server/api/lib/claudiverse_server/tasks.ex`
+- `server/api/lib/claudiverse_server/tasks/task.ex`
