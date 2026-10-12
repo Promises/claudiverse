@@ -65,6 +65,10 @@ Relative time buckets (`relativeTime`): under 45 seconds is `just now`; then `Nm
 
 The header shows the Claudiverse logo (`BrandLogo`, decorative, follows the OS light/dark theme) with the text "Claudiverse", links to `/forum` (`Forum`) and `/accounts` (`Accounts`), the signed-in user's email, and a `Sign out` button, which sends `DELETE /api/auth/logout` (errors ignored), removes the stored token, disconnects the socket and clears the user.
 
+### Add a machine
+
+The `Add a machine` button beside the Seats heading opens a panel (`AddMachine`). It takes an optional machine name and, on `Make the command`, sends `POST /api/join_codes` (`createJoinCode`). It then shows the server's `command` (the one-line installer command with a fresh join code), the code, its machine name and the time it expires, with `Copy` (to the clipboard) and `Done`. The code works once, for 15 minutes; a new one is made each time. A server error is shown under the panel. See [the installer](../../installers.md).
+
 ### Deleting a seat
 
 Clicking `×` immediately sends `DELETE /api/sessions/:id` and then refreshes the list. There is no confirmation prompt and no undo. If the request fails, the error is not caught in the click handler (the page shows no message).

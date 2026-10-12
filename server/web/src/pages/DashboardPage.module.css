@@ -65,6 +65,20 @@
   margin-bottom: 20px;
 }
 
+.addBtn {
+  padding: 6px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  background: var(--accent-light);
+}
+
 .empty {
   text-align: center;
   padding: 40px;

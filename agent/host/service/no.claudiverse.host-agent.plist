@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- macOS launchd agent for the claudiverse host agent. install.sh fills in
-     @NODE@, @AGENT@, @PATH@ and @LOG@ and loads it into the user's GUI domain. -->
+     @NODE@, @AGENT@, @PATH@, @LOG@ and @LABEL@ and loads it into the user's GUI domain. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>no.claudiverse.host-agent</string>
+  <string>@LABEL@</string>
   <key>ProgramArguments</key>
   <array>
     <string>@NODE@</string>
@@ -16,6 +16,14 @@
     <!-- tmux and cv-spawn's tools must be reachable: launchd's own PATH is minimal. -->
     <key>PATH</key>
     <string>@PATH@</string>
+    <!-- The home and config install.sh installed it with. launchd gives a job
+         the user's real home, whatever HOME was when it was installed: a job
+         installed from another HOME (a test) read the live config, and joined
+         the live server as this machine (MEASURED 2026-10-12). -->
+    <key>HOME</key>
+    <string>@HOME@</string>
+    <key>CLAUDIVERSE_HOST_AGENT_CONFIG</key>
+    <string>@CONF@</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

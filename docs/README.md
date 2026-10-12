@@ -48,7 +48,7 @@ How the parts talk to each other:
 
 | To | Read |
 |---|---|
-| Install the server, a machine and a first seat | [Setup guide](guide/README.md) |
+| Install the server, a machine and a first seat | [The installer](reference/installers.md) (one command), or the [setup guide](guide/README.md) (by hand) |
 | Run the server in production, back it up, upgrade it | [DEPLOY.md](DEPLOY.md), [Deployment](reference/server/deployment.md) |
 | Look up an environment variable or config key | [Server configuration](reference/server/configuration.md), [mod configuration](reference/services/mod/configuration.md), [host agent configuration](reference/host-agent/configuration.md), [runner configuration](reference/runners/README.md#common-configuration) |
 | Find which page documents an endpoint | [Server route map](reference/server/README.md#route-map), [every call the mod makes](reference/services/mod/server-api.md) |

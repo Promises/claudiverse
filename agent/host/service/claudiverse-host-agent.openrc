@@ -1,0 +1,25 @@
+#!/sbin/openrc-run
+# OpenRC service for the claudiverse host agent (Linux without systemd, e.g.
+# Alpine). install.sh fills in node's and the agent's paths, the service's
+# PATH, its log, the user and their home, installs it as
+# /etc/init.d/claudiverse-host-agent-<user> and adds it to the default
+# runlevel. It runs as that user, not as root.
+description="claudiverse host agent (@USER@)"
+command="@NODE@"
+command_args="@AGENT@"
+command_user="@USER@"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+directory="@HOME@"
+output_log="@LOG@"
+error_log="@LOG@"
+# The agent's own environment, for the agent alone: exported here, it would
+# replace OpenRC's PATH, and openrc-run could no longer find its own helpers
+# (MEASURED on Alpine 3.21: "ebegin: not found", and the service failed).
+start_stop_daemon_args="--env PATH=@PATH@ --env HOME=@HOME@ --env CLAUDIVERSE_HOST_AGENT_CONFIG=@CONF@"
+# Stopping signals the agent alone: the seats it started live on in tmux,
+# and the agent finds them again by their tmux sessions.
+
+depend() {
+	need net
+}

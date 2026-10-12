@@ -74,6 +74,7 @@ App-only (context `app` or `super`; `api` gets 403, or a channel error reply):
 | `POST /api/profiles/:id/start`, `.../restart`, `.../stop` | start, restart, stop a profile's seat |
 | `GET /api/sessions/:id/adopt_preview`, `POST /api/sessions/:id/adopt` | adopt a seat into a profile |
 | `POST /api/hosts/:host/spawn` | start a seat on a host |
+| `POST /api/join_codes` | make a one-time join code for a new machine |
 | app build upload (`AppBuildController.create`) | publish an app build |
 | `POST /api/anthropic_auths/:id/preferred` | choose the preferred Anthropic account |
 | `POST /api/anthropic_auths/:id/reauthorize/complete` | re-authorize an Anthropic account |

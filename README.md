@@ -7,26 +7,41 @@ them from your browser, your Mac or your phone.**
 
 ## Quick start
 
-You need Docker on the server, and Node.js 22+, tmux and Claude Code 2.1.287+
-on each machine that runs seats. The server, once:
+On the machine that will host the server (Linux or macOS), run:
 
 ```sh
-git clone https://github.com/Promises/claudiverse.git claudiverse
-cd claudiverse
-cp .env.example .env    # set SECRET_KEY_BASE, CV_VAULT_KEY and the URLs
-docker compose -f compose.yml --env-file .env up -d --build
-docker compose -f compose.yml logs server | grep -A3 "setup code"
+curl -fsSL https://raw.githubusercontent.com/Promises/claudiverse/main/install/install.sh | sh
 ```
 
-Then:
+It asks what to do and where, shows a summary, and asks before it acts. Choose
+**Set up a Claudiverse server**, and say yes to setting up a machine for seats:
 
-1. Open the web panel, create your account with the setup code, and add your
-   Claude accounts under **Accounts**.
-2. On each machine that runs seats, install the seat mod and the host agent:
-   [a machine for seats](docs/guide/3-machine.md), about ten minutes.
-3. [Start a seat](docs/guide/4-first-seat.md) from the web panel or the apps.
+1. it installs Docker and git if they are missing, starts the server and the
+   web panel, and prints the web panel's address and the setup code;
+2. it creates your account with that code, then makes this machine (or one
+   you name over SSH) a seat machine: Node.js, tmux, Claude Code, the seat
+   mod and the host agent;
+3. it starts a first seat, `hello`, which you open in the web panel. Add your
+   Claude accounts under **Accounts** so seats can answer.
 
+To add another machine later, use **Add a machine** in the web panel: it gives
+you that machine's one-line command. Run the installer again to update.
+
+Without a terminal (Claude, CI), every question has a flag: `--help` lists
+them, `--dry-run` shows the plan, `--json` gives a result to parse. See the
+[installer reference](docs/reference/installers.md). Prefer to do it by hand?
 The [setup guide](docs/guide/README.md) walks through every step.
+
+| | Server | Seat machine | Tested |
+|---|---|---|---|
+| Debian 12, Ubuntu 22.04/24.04 | yes | yes | Debian 12, Ubuntu 24.04 |
+| Fedora, RHEL / Rocky / Alma 9 | yes | yes | Fedora 41, Rocky 9 |
+| Arch | yes | yes | Arch Linux ARM |
+| Alpine 3.21+ | yes | yes (OpenRC) | Alpine 3.21 |
+| macOS 13+ | with Docker Desktop or OrbStack already running | yes | macOS 26: the plan, and a seat machine short of the seat mod |
+
+"Tested" is a full run of the installer, server and seat machine, on a fresh
+system; the other versions take the same steps.
 
 ## What's in this repository, and what you need
 

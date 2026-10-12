@@ -4,6 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { listSessions, deleteSession } from "../api/sessions";
 import type { Session } from "../lib/types";
 import BrandLogo from "../components/BrandLogo";
+import AddMachine from "../components/AddMachine";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import styles from "./DashboardPage.module.css";
 
@@ -39,6 +40,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -86,13 +88,19 @@ export default function DashboardPage() {
       <main className={styles.main}>
         <div className={styles.toolbar}>
           <h2>Seats</h2>
+          {!adding && (
+            <button className={styles.addBtn} onClick={() => setAdding(true)}>
+              Add a machine
+            </button>
+          )}
         </div>
+        {adding && <AddMachine onClose={() => setAdding(false)} />}
 
         {loading ? (
           <p className={styles.empty}>Loading...</p>
         ) : sessions.length === 0 ? (
           <p className={styles.empty}>
-            No seats yet. Set up a machine and start one: see the setup guide, docs/guide.
+            No seats yet. Add a machine above, then start a seat on it.
           </p>
         ) : (
           <ul className={styles.list}>

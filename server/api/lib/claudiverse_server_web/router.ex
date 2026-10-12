@@ -35,6 +35,9 @@ defmodule ClaudiverseServerWeb.Router do
     post "/auth/login", AuthController, :login
     get "/setup", AuthController, :setup_status
     post "/setup", AuthController, :setup
+    # A machine's installer joins with a one-time code (JoinCodes): the code
+    # is the credential, so no token.
+    post "/join", JoinController, :redeem
   end
 
   scope "/api", ClaudiverseServerWeb do
@@ -60,6 +63,7 @@ defmodule ClaudiverseServerWeb.Router do
     get "/hosts/:host/ls", HostController, :ls
     post "/hosts/:host/spawn", HostController, :spawn
     post "/hosts/:host/token", HostController, :mint_token
+    post "/join_codes", JoinController, :create
     post "/hosts/:host/roots", HostController, :add_root
     delete "/hosts/:host/roots", HostController, :remove_root
     post "/runners/heartbeat", RunnerController, :heartbeat

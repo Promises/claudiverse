@@ -1,8 +1,10 @@
 # Setting up Claudiverse
 
-This guide installs the whole stack from nothing: the server, your Anthropic
-accounts, one machine that runs seats, a first seat, and the apps. Plan on
-about half an hour.
+This guide installs the whole stack from nothing, by hand: the server, your
+Anthropic accounts, one machine that runs seats, a first seat, and the apps.
+Plan on about half an hour. [The installer](../reference/installers.md) does
+the same in one command; this guide is for doing it yourself, or seeing
+what the installer does.
 
 A **seat** is a Claude Code session connected to your Claudiverse server. You
 can watch it, type into it and answer its questions from the web panel or the

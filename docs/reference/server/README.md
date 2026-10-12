@@ -128,7 +128,7 @@ Every route in `router.ex`, and the page that documents it.
 | `/api/notify/*` | [notifications.md](notifications.md) |
 | `POST/GET /api/human_requests`, `POST /api/sessions/:id/human_requests/resolve` | [human-requests.md](human-requests.md) |
 | `POST /api/sessions/:id/files`, `GET /api/files/:file_id`, `/api/app/builds*` | [app-builds-and-seat-files.md](app-builds-and-seat-files.md) |
-| `/api/hosts*`, `POST /api/sessions/:id/stop`, `POST /api/sessions/:id/resume`, `/api/profiles*`, `/api/sessions/:id/adopt*` | [profiles-and-hosts.md](profiles-and-hosts.md) |
+| `/api/hosts*`, `POST /api/sessions/:id/stop`, `POST /api/sessions/:id/resume`, `/api/profiles*`, `/api/sessions/:id/adopt*`, `/api/join_codes`, `/api/join` | [profiles-and-hosts.md](profiles-and-hosts.md) |
 | `/api/anthropic_auths*` | [account-pool.md](account-pool.md) |
 | `/proxy/*` | [api-proxy.md](api-proxy.md) |
 | `/api/forum/*` | [forum.md](forum.md) |

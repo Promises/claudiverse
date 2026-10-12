@@ -9,6 +9,8 @@ Wants=network-online.target
 [Service]
 ExecStart=@NODE@ @AGENT@
 Environment=PATH=@PATH@
+# The config install.sh installed it with, whatever this unit's HOME is.
+Environment=CLAUDIVERSE_HOST_AGENT_CONFIG=@CONF@
 Restart=always
 RestartSec=10
 # Stop or restart only the agent itself. The seats it starts run in a tmux

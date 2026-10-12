@@ -146,6 +146,22 @@ Purpose: a seat asking for the operator; at most one open request per session (a
 
 Indexes: `(session_id, status)`; `(user_id, status)`. There is no unique index; the "one open request per session" rule described in the migration is not a database constraint.
 
+### `join_codes`
+
+Purpose: one-time codes a new machine joins with (`JoinCodes`): **Add a machine** mints one, the machine's installer redeems it for its seat and host tokens. Schema `JoinCodes.JoinCode`. Feature page: [profiles-and-hosts.md](profiles-and-hosts.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `code_hash` | string | not null. The sha256 (hex) of the code, normalised (upper case, no dashes); the code itself is never stored |
+| `machine` | string | null. The name it was minted for; null when the machine names itself |
+| `expires_at` | utc_datetime | not null. 15 minutes after minting |
+| `used_at` | utc_datetime | null until the one redeem that succeeded |
+| `used_by_machine` | string | null. The machine name it was redeemed for |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(code_hash)`; `(user_id)`.
+
 ## Seat profiles
 
 ### `profiles`
@@ -775,6 +791,7 @@ Migrations run automatically at boot in a release: `application.ex` starts `Ecto
 | `20261011180000_create_seat_stalls` | `seat_stalls` and its indexes |
 | `20261012060000_add_account_uuid_to_anthropic_auths` | `anthropic_auths.account_uuid` |
 | `20261012090000_profiles_permission_mode_defaults_to_auto` | Rebuilds `profiles` with `permission_mode` defaulting to `"auto"` (SQLite cannot change a column default in place): the same columns, constraints and index, every row copied as it was, the AUTOINCREMENT counter kept. Existing rows keep their mode. |
+| `20261012120000_create_join_codes` | `join_codes` and its indexes |
 
 Notes on running them:
 
