@@ -38,7 +38,11 @@ defmodule ClaudiverseServerWeb.HostChannel do
       Hosts.place_waiting(socket.assigns.current_user.id, meta.ip)
       # After the join completes, so the agent can be asked to start seats.
       send(self(), :autostart)
-      {:ok, assign(socket, :host_name, name)}
+      # The seats that live on the machine now (agent 0.12+): a profile whose
+      # row reads running with none there is a leftover. nil from an older
+      # agent, or one that could not ask tmux.
+      live = if is_list(params["live_seats"]), do: for(t <- params["live_seats"], is_binary(t), do: t)
+      {:ok, socket |> assign(:host_name, name) |> assign(:live_seats, live)}
     else
       {:error, %{reason: "this token may not join host:#{name}"}}
     end
@@ -78,7 +82,8 @@ defmodule ClaudiverseServerWeb.HostChannel do
   def handle_info(:autostart, socket) do
     user_id = socket.assigns.current_user.id
     name = socket.assigns.host_name
-    Task.start(fn -> ClaudiverseServer.Profiles.autostart(user_id, name) end)
+    live = socket.assigns[:live_seats]
+    Task.start(fn -> ClaudiverseServer.Profiles.autostart(user_id, name, live) end)
     {:noreply, socket}
   end
 

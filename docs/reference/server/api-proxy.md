@@ -115,6 +115,8 @@ The upstream call is `Finch.stream_while/5`. Each upstream event is handled as i
 - An SSE `event: error` inside a 200 stream is detected (first 300 characters of the event line are kept) and logged as a warning.
 - If the upstream fails after the response started, the exchange is logged and recorded as aborted. If it fails before any response (connection refused, DNS), the client gets **502** `api_error` (`cv-proxy: upstream unreachable: ...`).
 
+A main-loop model call (see [Request classes](#request-classes)) is also reported to auto-resume, by cast and off the request's path: the stream started (the model answered 200), the stream ended (whole, or cut), or the call was refused for want of a pool account. A seat whose turn died on an empty pool or on a server restart that cut its stream gets one `continue` later; see [auto-resume.md](auto-resume.md).
+
 Proxy-generated errors (403, 413, 429, 502) use the API's own error shape, `{"type":"error","error":{"type":"...","message":"..."}}`, so Claude Code reports and retries them as it would an upstream error.
 
 ### Pooled seats and failover
@@ -128,7 +130,7 @@ The second form is for a seat that keeps its own login. Claude Code fetches its 
 
 For a pooled request:
 
-1. `Credentials.current(seat)` returns a lease (`auth_id`, `label`, `access_token`) or an error. On error the client gets **429** `rate_limit_error` (`cv-proxy: no pool account is available (<reason>)`) and nothing goes upstream.
+1. `Credentials.current(seat)` returns a lease (`auth_id`, `label`, `access_token`) or an error. On error the client gets **429** `rate_limit_error` (`cv-proxy: no pool account is available (<reason>)`) and nothing goes upstream. A main-loop call refused with `no_available_auth` opens a pool incident in [auto-resume](auto-resume.md).
 2. The request is forwarded with `Authorization: Bearer <access_token>`.
 3. A response status of **429 or 401** on a pooled request is **held**: headers and body are buffered and nothing is sent to the client.
 4. Held 429 (attempts left): the proxy fails over only if the account is really spent, meaning `anthropic-ratelimit-unified-status` is `rejected`, or `anthropic-ratelimit-unified-reset` (Unix seconds) is more than 60 seconds in the future. Then `Credentials.rate_limited(auth_id, resets_at, seat)` cools the account and returns the next lease, and the same request is retried. A short or unexplained 429 is relayed as is and cools nothing.
@@ -159,7 +161,7 @@ See [account-pool.md](account-pool.md) for how accounts are enrolled, leased and
 | no `tools` array or empty | `auxiliary` (session titling, prompt suggestion) |
 | otherwise | `main` |
 
-Hinted values seen by the observer code are `main`, `subagent`, `compaction`, `auxiliary`, `probe` (and `workflow`, which the observer ignores). The account a request is billed to is read from `metadata.user_id` (a JSON string) field `account_uuid`.
+Hinted values seen by the observer code are `main`, `subagent`, `compaction`, `auxiliary`, `probe` (and `workflow`, which the observer ignores). Auto-resume asks a narrower question without decoding the body, `Request.main_loop?/2`: the hint when present (`main` or `compaction`), else no `x-claude-code-agent-id` and the bytes `"tools":[{` in the body. The account a request is billed to is read from `metadata.user_id` (a JSON string) field `account_uuid`.
 
 `Request.assistant/2` rebuilds the assistant message from the response: an SSE stream (`content-type` containing `event-stream`) is folded from `message_start`, `content_block_start`/`delta`, `message_delta` events (text, thinking, signature and tool-input deltas); any other body is parsed as a JSON `message`. `Request.ratelimit/1` extracts the `anthropic-ratelimit-unified*` response headers.
 
@@ -330,6 +332,7 @@ Everything else is the upstream's response.
 ## Related pages
 
 - [The Anthropic account pool](account-pool.md): enrolment, leasing, cooldowns behind `Proxy.Credentials`.
+- [Auto-resume](auto-resume.md): what the proxy's stream and refusal reports are for.
 - [Sessions and Rooms](sessions-and-rooms.md): the `proxy` session type and Rooms.
 - [HTTP mirror, inbox long-poll and liveness](mirror-inbox-liveness.md): mirroring, the inbox hook and the zombie sweep (which skips proxy rows).
 - [Questions and permission relays](questions-and-permissions.md): `AskUserQuestion` handling.

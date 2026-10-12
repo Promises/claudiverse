@@ -61,6 +61,20 @@ defmodule ClaudiverseServerWeb.ProfileTest do
     end
   end
 
+  test "a new profile with no mode runs in auto; one given default keeps it", ctx do
+    no_mode = as(ctx.super) |> post("/api/profiles", Map.merge(Map.delete(@base, "permission_mode"), %{"name" => "no-mode"}))
+              |> json_response(201) |> Map.fetch!("profile")
+    assert no_mode["permission_mode"] == "auto"
+    assert profile!(ctx, %{"name" => "given-default", "permission_mode" => "default"})["permission_mode"] == "default"
+
+    # The column itself, as a row written around the schema gets it.
+    now = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_naive()
+    {1, [%{permission_mode: mode}]} =
+      Repo.insert_all("profiles", [%{user_id: ctx.user.id, name: "raw", machine: "m5", folder: "/srv/ipsum", inserted_at: now, updated_at: now}],
+                      returning: [:permission_mode])
+    assert mode == "auto"
+  end
+
   test "a name is unique per user and validated; folder, mode and resume are checked", ctx do
     profile!(ctx)
     assert %{"errors" => %{"name" => _}} = as(ctx.super) |> post("/api/profiles", @base) |> json_response(422)
@@ -385,6 +399,37 @@ defmodule ClaudiverseServerWeb.ProfileTest do
     refute_push "request", %{"op" => "start_profile"}, 2_000
     # Another machine's profile is not even tried (a try would record "offline").
     assert %{"last_start" => nil} = as(ctx.api) |> get("/api/profiles/#{elsewhere["id"]}") |> json_response(200) |> Map.fetch!("profile")
+  end
+
+  test "after a reboot, a profile whose row still reads running but has no live seat there is started", ctx do
+    Application.put_env(:claudiverse_server, :host_spawn_interval_ms, 50)
+    on_exit(fn -> Application.delete_env(:claudiverse_server, :host_spawn_interval_ms) end)
+    gone = profile!(ctx, %{"name" => "auto-gone", "autostart" => true})
+    left = session_fixture(ctx.user, %{title: "auto-gone", profile_id: gone["id"], host: "m5"})
+    alive = profile!(ctx, %{"name" => "auto-alive", "autostart" => true})
+    kept = session_fixture(ctx.user, %{title: "auto-alive", profile_id: alive["id"], host: "m5"})
+
+    agent!(ctx, %{"live_seats" => ["auto-alive", "someone-else"]})
+    assert_push "request", %{"op" => "start_profile", "args" => %{"name" => "auto-gone"}}, 2_000
+    refute_push "request", %{"op" => "start_profile"}, 1_000
+    assert %{status: :stopped} = Repo.reload!(left)
+    assert %{status: :running} = Repo.reload!(kept)
+  end
+
+  test "an agent that reports no live seats (older, or tmux could not say) leaves running rows alone", ctx do
+    gone = profile!(ctx, %{"name" => "auto-gone", "autostart" => true})
+    row = session_fixture(ctx.user, %{title: "auto-gone", profile_id: gone["id"], host: "m5"})
+    elsewhere = session_fixture(ctx.user, %{title: "auto-gone", profile_id: gone["id"], host: "m1"})
+
+    agent!(ctx)
+    refute_push "request", %{"op" => "start_profile"}, 1_000
+    assert %{status: :running} = Repo.reload!(row)
+
+    # Reported, but one of its rows runs on another machine: not this agent's to end.
+    agent!(ctx, %{"live_seats" => []})
+    refute_push "request", %{"op" => "start_profile"}, 1_000
+    assert %{status: :running} = Repo.reload!(row)
+    assert %{status: :running} = Repo.reload!(elsewhere)
   end
 
   test "a profile whose last start failed recently is not retried on every reconnect", ctx do

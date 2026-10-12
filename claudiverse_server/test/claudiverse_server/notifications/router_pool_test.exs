@@ -94,6 +94,20 @@ defmodule ClaudiverseServer.Notifications.RouterPoolTest do
     assert content =~ "ACCOUNT POOL switched"
   end
 
+  @needs_reauth %{"change" => "needs_reauth", "auth_id" => 2, "label" => "Personal", "reason" => "refresh rejected with HTTP 400",
+                  "text" => "POOL needs re-auth: Personal (refresh rejected with HTTP 400) — re-authorize in the app"}
+  @reauthorized %{"change" => "reauthorized", "auth_id" => 2, "label" => "Personal", "text" => "POOL re-authorized: Personal (available)"}
+
+  test "an account needing re-auth, and its re-authorization, ping @pool and @pool:*", %{listener: l} do
+    for e <- [@needs_reauth, @reauthorized], watch <- [["@pool"], ["@pool:*"]] do
+      assert pinged(l, watch, e) =~ e["text"]
+      Router.ack(l.title, :all)
+      Room.mirror_messages(l.id, [%{"type" => "idle"}])
+    end
+
+    assert pinged(l, ["@pool:reset"], @needs_reauth) == nil
+  end
+
   test "a listener not watching @pool is not pinged", %{listener: l} do
     {:ok, _} = Router.subscribe(l.title, l.id, ["some-seat"])
     pool("degrade", 3)

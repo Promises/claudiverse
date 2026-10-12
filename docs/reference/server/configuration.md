@@ -113,6 +113,7 @@ config :claudiverse_server, ClaudiverseServer.Sessions.ZombieSweep, idle_ms: :ti
 | `:inbox_max_wait_s` | `60` | `InboxController` | Upper bound on an inbox long-poll's `wait` (the default `wait` is 50 s). |
 | `ClaudiverseServer.Sessions.ZombieSweep` | `[enabled: true, first_run_ms: 10 min, every_ms: 10 min, idle_ms: 30 min]` | `ZombieSweep` | Keyword list. `enabled: false` stops the sweeper starting (test config does this). |
 | `ClaudiverseServer.Schedules.Scheduler` | `[enabled: true]` | `Schedules.Scheduler` | `enabled: false` stops its ticks (test config does this; tests call `Scheduler.tick/1`). See [schedules.md](schedules.md). |
+| `ClaudiverseServer.AutoResume` | `[enabled: true, track: true, grace_s: 60]` | `AutoResume`, `AutoResume.Server`, `ProxyPlug` | `enabled: false`: no boot conversion, ticks or pool subscription; `track: false`: the proxy reports nothing (test config sets both; the auto-resume tests turn tracking on). `grace_s`: seconds after boot before a seat whose stream the restart cut gets its `continue`. See [auto-resume.md](auto-resume.md). |
 
 ### Questions and permission relays
 

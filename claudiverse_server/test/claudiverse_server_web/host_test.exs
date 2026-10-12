@@ -194,6 +194,13 @@ defmodule ClaudiverseServerWeb.HostTest do
                                           claude_session_id: @sid, status: :stopped, permission_mode: "plan"}, attrs))
   end
 
+  test "resume of a seat with no usable mode on record starts it in auto", ctx do
+    agent!(ctx)
+    s = stopped_seat(ctx, %{permission_mode: nil})
+    as(ctx.app) |> post("/api/sessions/#{s.id}/resume") |> json_response(202)
+    assert_push "request", %{"op" => "resume", "args" => %{"mode" => "auto"}}
+  end
+
   test "stop and resume are app-only: the seat token is 403 and the agent is never asked", ctx do
     agent!(ctx)
     s = stopped_seat(ctx)
@@ -294,7 +301,8 @@ defmodule ClaudiverseServerWeb.HostTest do
     refute_push "request", _
 
     assert as(ctx.app) |> post("/api/sessions/#{s.id}/resume", %{title: "seat-b"}) |> json_response(202)
-    assert_push "request", %{"op" => "resume", "args" => %{"title" => "seat-b", "mode" => "default"}}
+    # A bypass seat's mode never passes: it falls back as no mode does, to auto.
+    assert_push "request", %{"op" => "resume", "args" => %{"title" => "seat-b", "mode" => "auto"}}
   end
 
   test "resume refuses a running seat and one that never reported its Claude session", ctx do

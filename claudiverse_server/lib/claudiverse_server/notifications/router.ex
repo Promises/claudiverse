@@ -22,6 +22,8 @@ defmodule ClaudiverseServer.Notifications.Router do
   Anthropic account pool's CURRENT account changes, i.e. a failover (an account
   cooled at its margin or on a 429) or a fleet-wide switch (preference, an
   upgrade back). `cv_subscribe watch=["@pool"]`; the ping names both accounts.
+  `@pool` (and `@pool:*`) is also pinged when an account needs re-auth and
+  when it is re-authorized (AnthropicAuths: `needs_reauth`, `reauthorized`).
 
   More reserved titles ping on an account's usage (AnthropicAuths.PoolEvents):
 
@@ -80,6 +82,7 @@ defmodule ClaudiverseServer.Notifications.Router do
   # A scheduled prompt queued for a busy seat goes out on the same signal.
   def went_idle(session_id) do
     ClaudiverseServer.Schedules.Scheduler.seat_idle(session_id)
+    ClaudiverseServer.AutoResume.Server.seat_idle(session_id)
     GenServer.cast(__MODULE__, {:went_idle, session_id})
   end
 
@@ -95,8 +98,10 @@ defmodule ClaudiverseServer.Notifications.Router do
   the same reject-busy send as every flush, so a busy seat keeps its queue.
   """
   def seat_seen(title, session_id) do
-    # A scheduled prompt held for an absent seat goes out on the same signal.
+    # A scheduled prompt held for an absent seat goes out on the same signal,
+    # and so does a stalled seat's continue (AutoResume).
     ClaudiverseServer.Schedules.Scheduler.seat_seen(title, session_id)
+    ClaudiverseServer.AutoResume.Server.seat_seen(title, session_id)
     GenServer.cast(__MODULE__, {:seat_seen, title, session_id})
   end
 
@@ -361,7 +366,8 @@ defmodule ClaudiverseServer.Notifications.Router do
   # A usage event (PoolEvents): ping each listener watching one of its titles,
   # named by the title it watches, so cv_ack can clear it.
   @impl true
-  def handle_info({"pool", %{"change" => change, "text" => text} = event}, state) when change in ~w(reset capped step) do
+  def handle_info({"pool", %{"change" => change, "text" => text} = event}, state)
+      when change in ~w(reset capped step needs_reauth reauthorized) do
     titles = pool_event_titles(event)
 
     listeners =
@@ -421,6 +427,8 @@ defmodule ClaudiverseServer.Notifications.Router do
   defp pool_event_titles(%{"change" => "capped", "limit" => "session"}), do: ["@pool:capped:session"]
   defp pool_event_titles(%{"change" => "step", "every" => 10}), do: ["@pool:step:10"]
   defp pool_event_titles(%{"change" => "step", "every" => 5}), do: ["@pool:step:5", @pool_all]
+  # An account out of the pool until someone re-authorizes it, and back.
+  defp pool_event_titles(%{"change" => c}) when c in ["needs_reauth", "reauthorized"], do: [@pool, @pool_all]
   defp pool_event_titles(_), do: []
 
   defp label(nil), do: "no account (none leasable)"

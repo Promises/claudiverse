@@ -10,7 +10,8 @@
 //             409 → another poller took this seat over; stop
 //   mirror    every main-conversation row (session.append) → POST
 //             /api/sessions/:id/mirror, and {"type":"idle"} when a turn ends,
-//             which is what the server reads as ready for cv_send (002, 008/010)
+//             which is what the server reads as ready for cv_send (002, 008/010);
+//             a turn that died on an API error says so in its turn_complete
 //   permission a permission prompt shows its dialog here AND is polled at POST
 //             /api/hooks/seat/<title>/permissionrequest, so the apps can allow
 //             or deny it; the first answer, here or there, wins.
@@ -65,6 +66,10 @@ let pending: Mirrored[] = []
 let flushScheduled = false
 let titlePinned = false // CLAUDIVERSE_TITLE set by a launcher: /rename does not move the seat
 let lastEffort: string | number | undefined // the main loop's effort, from its last model request
+// The API error that is ending main's turn (classic.StopFailure, which fires
+// just before its turn.complete; measured on 2.1.291): its kind and the text
+// Claude Code shows, e.g. "API Error: ... (:no_available_auth)".
+let turnError: { error: string; text?: string } | null = null
 // This session's agents (forks, subagents, teammates) as the apps are told of
 // them: what agent.spawn said (fork, background), and the last list sent.
 const agentSpawns = new Map<string, { fork: boolean; background: boolean }>()
@@ -168,10 +173,15 @@ function poll($: any, gen: number, event?: string) {
       }
       if (pollFailures > 0) {
         // Back after an outage: the server may have restarted, so say hello again
-        // (registration is idempotent by Claude's session id) and tell it we are idle.
+        // (registration is idempotent by Claude's session id) and tell it we are
+        // idle. A turn that ended while the server was out sent its idle into the
+        // void, and a restarted server reads the seat's last stored state: busy.
+        // MEASURED 2026-10-11: a deploy cut lorem-w2-t2086's stream, its turn died,
+        // and its row read busy for 30 min, so every cv_send bounced.
         pollFailures = 0
         $.ui.status(`claudiverse · ${cfg!.title}`)
         await registerSeat($)
+        idleAgain($)
       }
       poll($, gen)
     })
@@ -222,11 +232,15 @@ function deliver($: any, text: string) {
   })
 }
 
+// The retry names the seat's state as an inbox event ("Stop": no turn is
+// running), which a restarted server reads as soon as the poll arrives; the
+// idle row sent on recovery comes only when that poll is answered (up to
+// POLL_WAIT_S later). A server that did not restart ignores the hint.
 function pollFailed($: any, gen: number) {
   pollFailures += 1
   if (pollFailures === 2) $.ui.status('claudiverse offline')
   const wait = Math.min(RETRY_MS * 2 ** (pollFailures - 1), POLL_RETRY_MAX_MS)
-  $.clock.after(wait, () => poll($, gen))
+  $.clock.after(wait, () => poll($, gen, turnId ? undefined : 'Stop'))
 }
 
 // What `work` resolves to, or `fallback` once `ms` pass first. `work` itself
@@ -784,6 +798,14 @@ export const register: Register = (on, options) => {
 
   on('turn.start', async ($, e, next) => {
     turnId = e.turnId
+    turnError = null
+    return next(e)
+  })
+
+  // The API error ending a turn: kept for that turn's turn_complete. A
+  // subagent's runs end in a turn.complete of their own, never main's.
+  on('classic.StopFailure', async ($, e: any, next) => {
+    if (e.agent_id === undefined) turnError = { error: e.error, text: e.last_assistant_message }
     return next(e)
   })
 
@@ -801,8 +823,13 @@ export const register: Register = (on, options) => {
       return r
     }
     turnId = null
+    // A turn that died on an API error (the pool empty, the stream cut) is
+    // idle all the same, and says why, so the row reads truthfully and the
+    // server's reject-busy delivery (a continue, a cv_send) reaches it.
+    const failed = e.reason === 'error' ? { error: turnError?.error ?? 'unknown', error_text: turnError?.text } : {}
+    turnError = null
     if (row != null) {
-      pending.push({ type: 'turn_complete' }, { type: 'idle' })
+      pending.push({ type: 'turn_complete', reason: e.reason, ...failed }, { type: 'idle' })
       flush($)
     }
     return r

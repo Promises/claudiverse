@@ -19,6 +19,7 @@ defmodule ClaudiverseServer.Profiles do
   `%{"op" => created|updated|deleted|start|stopped, "profile" => as listed}`.
   """
   import Ecto.Query
+  require Logger
 
   alias ClaudiverseServer.{Hosts, Repo}
   alias ClaudiverseServer.Profiles.Profile
@@ -212,12 +213,22 @@ defmodule ClaudiverseServer.Profiles do
   - one whose last start was refused or failed within @retry_after_ms is
     skipped, so a broken profile is not restarted on every reconnect;
   - starts are spaced by the machine's start interval (Hosts' rate limit).
+
+  `live` is what the agent reported at its join: the tmux sessions on the
+  machine with a Claude Code process in them (nil from an older agent). A
+  profile whose rows, all on this machine, read running while it has no live
+  seat there is a leftover of a reboot or a dead process: its rows end, and it
+  starts. MEASURED 2026-10-11: after an unexpected reboot of a machine, every
+  profile's row still read "running", so its agent's autostart skipped them all.
+
   Returns the names it started.
   """
-  def autostart(user_id, machine) do
+  def autostart(user_id, machine, live \\ nil) do
     profiles =
       from(p in Profile, where: p.user_id == ^user_id and p.machine == ^machine and p.autostart == true, order_by: [asc: p.name])
       |> Repo.all()
+
+    if is_list(live), do: end_leftovers(user_id, machine, profiles, live)
 
     due =
       profiles
@@ -237,6 +248,22 @@ defmodule ClaudiverseServer.Profiles do
         _ -> []
       end
     end)
+  end
+
+  defp end_leftovers(user_id, machine, profiles, live) do
+    for {p, %{status: "running"}} <- Enum.zip(profiles, with_status(user_id, profiles)), p.name not in live do
+      hosts =
+        from(s in Session,
+          where: s.user_id == ^user_id and s.profile_id == ^p.id and s.status == :running and s.type != :proxy,
+          select: s.host
+        )
+        |> Repo.all()
+
+      if Enum.all?(hosts, &(&1 == machine)) do
+        Logger.info("[profiles] #{p.name}: its row reads running but no seat lives on #{machine}; ending it so autostart starts it")
+        ended(user_id, p)
+      end
+    end
   end
 
   @retry_after_ms 600_000

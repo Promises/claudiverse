@@ -92,8 +92,8 @@ Consecutive deltas of the same block (same `index` and delta type) that arrive w
 
 | Row | Sent when |
 | --- | --- |
-| `{"type":"idle"}` | the seat goes online (registration succeeded); at the end of a main turn (after `turn_complete`); from `idleAgain` when something that started no turn finished (a `/compact` sent by `cv_send`, a refused slash command, a failed prompt submit) and no turn is running |
-| `{"type":"turn_complete"}` | a main turn completes (queued together with `idle`) |
+| `{"type":"idle"}` | the seat goes online (registration succeeded); at the end of a main turn (after `turn_complete`); from `idleAgain` when something that started no turn finished (a `/compact` sent by `cv_send`, a refused slash command, a failed prompt submit) and no turn is running; on the first good inbox answer after an outage, when no turn is running |
+| `{"type":"turn_complete","reason":"…"}` | a main turn completes (queued together with `idle`), whatever ended it. `reason` is `answer`, `aborted`, `refusal` or `error`; for `error` also `error` (Claude Code's kind of API error, e.g. `rate_limit`, `server_error`) and `error_text` (what it showed, e.g. `API Error: ... cv-proxy: no pool account is available (:no_available_auth)`), from `classic.StopFailure`, which fires just before `turn.complete` |
 | `{"type":"compact"}` | `session.compact` finished |
 | `{"type":"agent_turn_complete","agent_id":"…"}` | an agent's turn completes |
 
@@ -107,7 +107,7 @@ An agent finishing a turn does not send `turn_complete` or `idle`, and does not 
 | `agent_message` | `agent_id`, `timestamp`, `message` `{type, uuid, timestamp, isMeta, message {role, content, model?}}` | this page |
 | `stream_event` | `event` (API stream event) | this page |
 | `idle` | none | this page |
-| `turn_complete` | none | this page |
+| `turn_complete` | `reason`; `error`, `error_text` when `reason` is `error` (0.11.0+) | this page |
 | `compact` | none | this page |
 | `agent_turn_complete` | `agent_id` | this page |
 | `agent_started` | `agent_id`, `agent_type`, `description`, `name`, `fork`, `background`, `parent_agent_id`, `tool_use_id` | [Agents and background work](agents-and-background.md) |
@@ -150,7 +150,7 @@ Errors the server returns:
 | 400 | `{"error":"messages must be a list"}` | `messages` missing or not a list |
 | 404 | `{"error":"Not found"}` | the id is not a session of the token's user |
 
-The server treats each row as it would a sidecar's `mirror_messages`: stored, broadcast to viewers, and used for the seat's readiness. Readiness is read from the row type: any other row reads the seat as busy, and a `{"type":"idle"}` row reads it as idle. That is why `turn_complete` is always followed by `idle` in the same batch. `turn_complete` alone does not make the seat idle, and the server does not use it to notify watchers; an `idle` row does. `compact` does not change readiness. Agent row types (`agent_started`, `agent_message`, `agent_turn_complete`, `agent_ended`, `agents`) never change main's busy/idle. A seat that is busy rejects a `cv_send`; an idle one accepts it.
+The server treats each row as it would a sidecar's `mirror_messages`: stored, broadcast to viewers, and used for the seat's readiness. Readiness is read from the row type: any other row reads the seat as busy, and a `{"type":"idle"}` row reads it as idle. That is why `turn_complete` is always followed by `idle` in the same batch, including for a turn that died on an API error: the seat is at its prompt, so reject-busy delivery (a `cv_send`, a scheduled prompt, [auto-resume](../../server/auto-resume.md)'s `continue`) must reach it. `turn_complete` alone does not make the seat idle, and the server does not use it to notify watchers; an `idle` row does. `compact` does not change readiness. Agent row types (`agent_started`, `agent_message`, `agent_turn_complete`, `agent_ended`, `agents`) never change main's busy/idle. A seat that is busy rejects a `cv_send`; an idle one accepts it.
 
 ## Failure modes and troubleshooting
 

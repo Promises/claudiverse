@@ -46,6 +46,7 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
   require Logger
 
   alias ClaudiverseServer.Accounts
+  alias ClaudiverseServer.AutoResume
   alias ClaudiverseServer.Proxy.{Credentials, Observer, Request}
 
   @finch ClaudiverseServer.Proxy.Finch
@@ -113,9 +114,11 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
             do: nil,
             else: observe_request(conn, user, seat, path, body)
 
+        resume = resume_key(conn, user, seat, path, body)
+
         if pooled?(conn.req_headers),
-          do: forward_pooled(conn, path, body, observe, seat),
-          else: forward(conn, path, body, observe, nil)
+          do: forward_pooled(conn, path, body, observe, seat, resume),
+          else: forward(conn, path, body, observe, nil, resume)
 
       {:error, reason} ->
         conn |> api_error(413, "request_too_large", "cv-proxy: #{inspect(reason)}") |> halt()
@@ -134,19 +137,19 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
   # rather than relayed: the pool is told, and the same request is retried on
   # the account it hands back. Claude Code never sees the 429.
 
-  defp forward_pooled(conn, path, body, observe, seat) do
+  defp forward_pooled(conn, path, body, observe, seat, resume) do
     case Credentials.current(seat) do
-      {:ok, lease} -> pooled_attempt(conn, path, body, observe, seat, lease, @pool_attempts)
-      {:error, reason} -> no_pool_account(conn, reason)
+      {:ok, lease} -> pooled_attempt(conn, path, body, observe, seat, lease, @pool_attempts, resume)
+      {:error, reason} -> no_pool_account(conn, reason, resume)
     end
   end
 
-  defp pooled_attempt(conn, path, body, observe, seat, lease, left) do
-    case forward(conn, path, body, observe, lease) do
+  defp pooled_attempt(conn, path, body, observe, seat, lease, left, resume) do
+    case forward(conn, path, body, observe, lease, resume) do
       {:held, %{status: 429} = acc} when left > 1 ->
         if limit_reached?(acc.headers) do
           case Credentials.rate_limited(lease.auth_id, resets_at(acc.headers), seat) do
-            {:ok, next} -> pooled_attempt(acc.conn, path, body, observe, seat, next, left - 1)
+            {:ok, next} -> pooled_attempt(acc.conn, path, body, observe, seat, next, left - 1, resume)
             {:error, _} -> relay_held(acc, observe)
           end
         else
@@ -158,7 +161,7 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
 
       {:held, %{status: 401} = acc} when left > 1 ->
         case Credentials.unauthorized(lease.auth_id, seat) do
-          {:ok, next} -> pooled_attempt(acc.conn, path, body, observe, seat, next, left - 1)
+          {:ok, next} -> pooled_attempt(acc.conn, path, body, observe, seat, next, left - 1, resume)
           {:error, _} -> relay_held(acc, observe)
         end
 
@@ -205,8 +208,11 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
     halt(conn)
   end
 
-  defp no_pool_account(conn, reason) do
+  defp no_pool_account(conn, reason, resume) do
     Logger.warning("[proxy] pooled request refused: no pool account (#{inspect(reason)})")
+    # The seat's turn ends on this once Claude Code's retries run out: it gets
+    # a continue when an account is leasable again.
+    if resume && reason == :no_available_auth, do: AutoResume.Server.refused(resume, "cv-proxy: no pool account is available (:no_available_auth)")
 
     conn
     |> api_error(429, "rate_limit_error", "cv-proxy: no pool account is available (#{inspect(reason)})")
@@ -277,7 +283,18 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
     end
   end
 
-  defp forward(conn, path, body, observe, lease) do
+  # Whose main-loop model call this is, for auto-resume (AutoResume): the seat
+  # it is reported for when its stream starts, ends or is refused. Nil for
+  # anything else, and when tracking is off.
+  defp resume_key(conn, user, seat, path, body) do
+    if is_binary(seat) and conn.method == "POST" and path == "/v1/messages" and
+         Application.get_env(:claudiverse_server, AutoResume, [])[:track] != false and
+         Request.main_loop?(conn.req_headers, body) do
+      {user.id, seat, Request.header(conn.req_headers, "x-claude-code-session-id")}
+    end
+  end
+
+  defp forward(conn, path, body, observe, lease, resume) do
     upstream = Application.get_env(:claudiverse_server, :proxy_upstream, "https://api.anthropic.com")
     url = upstream <> path <> if(conn.query_string == "", do: "", else: "?" <> conn.query_string)
 
@@ -291,13 +308,23 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
       end
 
     req = Finch.build(conn.method, url, headers, body)
-    acc = %{conn: conn, status: nil, headers: [], chunks: [], aborted: false, pooled: lease != nil, held: false, sse_error: nil}
+    acc = %{conn: conn, status: nil, headers: [], chunks: [], aborted: false, pooled: lease != nil, held: false, sse_error: nil,
+            resume: resume, streaming: false}
 
     result =
       Finch.stream_while(req, @finch, acc, &on_stream/2,
         # Between chunks, not overall: a long generation streams for minutes.
         receive_timeout: 600_000
       )
+
+    # However it ended; `clean` when the whole response reached the seat. A
+    # server that stops kills this process before here, or ends the stream
+    # unclean, which is how a restart leaves the seat in flight (AutoResume).
+    case result do
+      {:ok, %{streaming: true, resume: key} = acc} -> AutoResume.Server.stream_ended(key, not acc.aborted and acc.sse_error == nil)
+      {:error, _, %{streaming: true, resume: key}} -> AutoResume.Server.stream_ended(key, false)
+      _ -> :ok
+    end
 
     case result do
       {:ok, %{held: true} = acc} ->
@@ -355,7 +382,12 @@ defmodule ClaudiverseServerWeb.ProxyPlug do
       |> no_transform()
       |> send_chunked(acc.status)
 
-    {:cont, %{acc | conn: conn, headers: headers}}
+    # The model answered: the seat's turn is alive, and a response is in
+    # flight to it until this exchange ends.
+    streaming = acc.resume != nil and acc.status == 200
+    if streaming, do: AutoResume.Server.stream_started(acc.resume)
+
+    {:cont, %{acc | conn: conn, headers: headers, streaming: streaming}}
   end
 
   defp on_stream({:data, data}, %{held: true} = acc), do: {:cont, %{acc | chunks: [acc.chunks, data]}}

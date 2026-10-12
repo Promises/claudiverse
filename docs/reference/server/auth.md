@@ -53,7 +53,7 @@ flowchart LR
     api --> A1["seat HTTP API, MCP, hooks, proxy,<br/>session:* and operator:* channels,<br/>deny a permission prompt"]
     app --> A1
     super --> A1
-    app --> A2["app-only: force send, permission mode,<br/>seat access and paging, stop/resume/start seats,<br/>adopt, file send, resolve human requests,<br/>app builds, preferred Anthropic account,<br/>allow a permission prompt, send_raw"]
+    app --> A2["app-only: force send, permission mode,<br/>seat access and paging, stop/resume/start seats,<br/>adopt, file send, resolve human requests,<br/>app builds, preferred Anthropic account,<br/>re-authorizing one,<br/>allow a permission prompt, send_raw"]
     super --> A2
     super --> A3["super-only: GET/DELETE /api/tokens,<br/>POST /api/hosts/:host/token, host folder roots,<br/>create/edit/delete/rename profiles"]
 ```
@@ -76,6 +76,7 @@ App-only (context `app` or `super`; `api` gets 403, or a channel error reply):
 | `POST /api/hosts/:host/spawn` | start a seat on a host |
 | app build upload (`AppBuildController.create`) | publish an app build |
 | `POST /api/anthropic_auths/:id/preferred` | choose the preferred Anthropic account |
+| `POST /api/anthropic_auths/:id/reauthorize/complete` | re-authorize an Anthropic account |
 | channel `session:*`, event `send_raw` (observer) | keystrokes into a seat |
 | channel `session:*`, event `permission_response` with `decision: "allow"` (observer) | allow a permission prompt. Any observer may deny. |
 

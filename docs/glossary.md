@@ -254,11 +254,29 @@ cools an account off when it hits its limits, and fails over to the next. The
 web panel calls this page **Accounts**, the apps **Pool**. See
 [Account pool](reference/server/account-pool.md).
 
+### Re-authorization
+
+Signing in to a pool account again after its refresh token was rejected
+(status `needs_reauth`: it is out of the pool until then). The apps do it in
+one step for that account; it keeps its place in the pool, and a login of a
+different account is refused unless the operator means it. `@pool` watchers
+are pinged when an account needs it and when it is done. See
+[Account pool](reference/server/account-pool.md#re-authorization).
+
 ### Proxy
 
 The server's `/proxy` endpoint, which relays a seat's model requests to the
 Anthropic API with a pooled account's credentials. See
 [API proxy](reference/server/api-proxy.md).
+
+### Auto-resume
+
+The server's one `continue` to a seat whose turn died on a [proxy](#proxy)
+error: the [pool](#pool) had no account to lease, or a server restart cut the
+response mid-stream. It goes out once the cause is over (an account is
+leasable; the grace after boot has passed), through the same reject-busy
+delivery as `cv_send`, once per seat per incident. See
+[Auto-resume](reference/server/auto-resume.md).
 
 ### Token
 

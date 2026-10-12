@@ -31,7 +31,9 @@ defmodule ClaudiverseServer.Profiles.Profile do
     field :runtime, :string, default: "stock+mod"
     field :model, :string
     field :effort, :string
-    field :permission_mode, :string, default: "default"
+    # A new profile runs in auto mode unless it says otherwise (operator
+    # 2026-10-12: "default should be auto"); the column default agrees.
+    field :permission_mode, :string, default: "auto"
     field :mcp, {:array, :string}, default: []
     # On unless a profile says otherwise: a pooled seat always goes out with
     # the preferred account and fails over with the pool (operator, 2026-10-07).

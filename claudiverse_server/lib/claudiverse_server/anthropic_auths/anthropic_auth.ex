@@ -15,6 +15,8 @@ defmodule ClaudiverseServer.AnthropicAuths.AnthropicAuth do
   schema "anthropic_auths" do
     field :label, :string
     field :account_email, :string
+    # The account's stable id, from the token response (`account.uuid`).
+    field :account_uuid, :string
 
     # Encrypted at rest. The changeset encrypts on write; read them back with
     # `decrypt_access_token/1` and `decrypt_refresh_token/1` rather than
@@ -51,6 +53,7 @@ defmodule ClaudiverseServer.AnthropicAuths.AnthropicAuth do
     |> cast(attrs, [
       :label,
       :account_email,
+      :account_uuid,
       :expires_at,
       :scopes,
       :status,

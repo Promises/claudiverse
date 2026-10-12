@@ -125,7 +125,7 @@ Fields (everything except `id`, `last_start` and the timestamps is writable):
 | `runtime` | string | `stock+mod` | `A-Za-z0-9.+_-`, 1-64 characters; a name the agent knows |
 | `model` | string or null | null | free text |
 | `effort` | string or null | null | one of `low`, `medium`, `high`, `xhigh`, `max` |
-| `permission_mode` | string | `default` | one of `default`, `acceptEdits`, `plan`, `auto` (never `bypassPermissions`) |
+| `permission_mode` | string | `auto` | one of `default`, `acceptEdits`, `plan`, `auto` (never `bypassPermissions`). A profile created before 2026-10-12 without a mode has `default`, and keeps it. |
 | `mcp` | list of strings | `[]` | each matches the `name` format; names from the machine's catalog |
 | `pooled` | boolean | **true** | a pooled seat goes out with the preferred account and fails over with the pool |
 | `autostart` | boolean | false | start when the machine's agent comes online |
@@ -158,7 +158,7 @@ Listings add three derived fields: `status`, `seat` (the id of the running seat 
 - `start`: refused with 409 when a running seat row exists for the profile. Otherwise it records `starting`, calls `Hosts.start_profile`, and returns 202. A rate-limited or offline machine is recorded as `refused` (reason `rate_limited`) or `offline` and returned as an error.
 - `stop`: asks the agent to close the tmux session named after the profile (`op: stop`, `args: {title: name}`). On success it stamps `stopped_at` into `last_start` and ends the profile's running rows immediately (`Room.ended_by_machine`), then emits a `stopped` event.
 - `restart`: stop, then start, so the seat picks up the current revision. If the agent answers `not_found` (the seat is not running on its machine), the stale running row is ended and the profile is started.
-- `autostart`: when an agent joins `host:<name>`, the channel starts a task that starts that machine's `autostart` profiles whose status is `stopped` or `failed`, skipping any whose last start was `refused` or `failed` less than 10 minutes ago (600 000 ms, so a broken profile is not retried on every reconnect). Starts are spaced by `host_spawn_interval_ms + 500` ms (10.5 s by default).
+- `autostart`: when an agent joins `host:<name>`, the channel starts a task that starts that machine's `autostart` profiles whose status is `stopped` or `failed`, skipping any whose last start was `refused` or `failed` less than 10 minutes ago (600 000 ms, so a broken profile is not retried on every reconnect). Starts are spaced by `host_spawn_interval_ms + 500` ms (10.5 s by default). When the agent sent `live_seats`, a profile whose rows read running, all on this machine, while no live seat there has its name, is a leftover of a reboot or a dead process: its rows end (as a stop would end them) and it is started like a stopped one. Without `live_seats`, or with a running row on another machine, a running row is left alone, as before.
 
 **Rename.** `POST /api/profiles/:id/rename` is the only way to change `name`, because a running seat reads its title once at launch (the mod's inbox poll and hook URLs, the MCP server's identity, the tmux session). So:
 
@@ -238,6 +238,7 @@ Join payload (all optional; anything of the wrong type is dropped):
 | `modes` | list of strings | permission modes a profile may choose here |
 | `runtimes` | list of `{"name", "version"}` | runtimes a profile may choose; entries without a string `name` are dropped |
 | `mcp` | list of strings | MCP catalog names a profile may choose |
+| `live_seats` | list of strings | agent 0.12+: the tmux sessions on the machine with a Claude Code process in their pane, at this join. Autostart uses it to start a profile whose row is a leftover (see "Profiles"). Absent when the agent is older or tmux could not say. |
 
 Events:
 
@@ -273,7 +274,7 @@ All under `/api`, Bearer token. "App" means an `app` or `super` token.
 | `GET /hosts/:host/ls?path=` | any | Relayed to the agent as `ls`; its result is returned as is. 504 `host <h> is offline` or `host <h> did not answer`; agent refusals as above. |
 | `POST /hosts/:host/spawn` | app | Body `path` (required, non-empty), `title` (optional, `A-Za-z0-9._-`, 1-64), `mode` (default `auto`; one of `default`, `acceptEdits`, `plan`, `auto`), `prompt` (optional, at most 20 000 characters). 202 `{"spawn_id"}`. 400 on a bad field, 403 `spawning seats is app-only`, 429 `one spawn per 10 s per host`, 504 if the host is offline. |
 | `POST /sessions/:id/stop` | app | Asks the seat's machine to close its tmux session (`stop`, by the seat's title). On success the room is ended and the answer is `{"ok": true, "host", "title"}`. |
-| `POST /sessions/:id/resume` | app | Optional body `title`, `mode`. Restarts a stopped seat with `claude --resume`. 202 `{"spawn_id"}`; the outcome is `host_spawn` with `op: "resume"`. The session id used is the row's `conversation_id`, else its `claude_session_id`; the mode defaults to the seat's last mode if it is one of the four, else `default`. Shares the spawn rate limit. |
+| `POST /sessions/:id/resume` | app | Optional body `title`, `mode`. Restarts a stopped seat with `claude --resume`. 202 `{"spawn_id"}`; the outcome is `host_spawn` with `op: "resume"`. The session id used is the row's `conversation_id`, else its `claude_session_id`; the mode defaults to the seat's last mode if it is one of the four, else `auto` (so a seat that ran in `bypassPermissions` resumes in `auto`). Shares the spawn rate limit. |
 | `POST /hosts/:host/token` | super | Mints a host token for the name (`A-Za-z0-9._-`, 1-128). 201 `{"name", "token"}`; 400 on a bad name. Put the token in the agent's config. |
 | `POST /hosts/:host/roots` | super | Body `path` (absolute). Asks the agent to add a folder to its whitelist; the agent refuses (403 `not_allowed`) unless its own config allows remote roots. Returns the agent's `{roots}`. |
 | `DELETE /hosts/:host/roots` | super | Body `path`. Removes one; always allowed by design (it only narrows). |
@@ -324,7 +325,7 @@ Both app or super token only (403 `adopting seats is app-only`); 404 `Not found`
 
 | Method and path | Behaviour |
 |---|---|
-| `GET /sessions/:id/adopt_preview?host=` | 200 `{"process", "existing_profile", "suggested", "blocked"}`. `process` is `{pid, proc_start, tmux, status, version, matched_by, session_id}` from the agent. `suggested` is a full set of profile fields (`machine`, `folder`, `fleet`, `role` `member`, `can_notify`, `runtime`, `model`, `effort`, `permission_mode`, `mcp` `["claudiverse"]`, `pooled`, `autostart` false, `resume` the process's conversation id, `debug` false). `blocked` is a sentence for the operator or null; when blocked, `process` and `suggested` are null (and an `outside_roots` refusal adds `folder`). |
+| `GET /sessions/:id/adopt_preview?host=` | 200 `{"process", "existing_profile", "suggested", "blocked"}`. `process` is `{pid, proc_start, tmux, status, version, matched_by, session_id}` from the agent. `suggested` is a full set of profile fields (`machine`, `folder`, `fleet`, `role` `member`, `can_notify`, `runtime`, `model`, `effort`, `permission_mode` (the seat's last mode, else `auto`), `mcp` `["claudiverse"]`, `pooled`, `autostart` false, `resume` the process's conversation id, `debug` false). `blocked` is a sentence for the operator or null; when blocked, `process` and `suggested` are null (and an `outside_roots` refusal adds `folder`). |
 | `POST /sessions/:id/adopt` | Body: the profile fields (machine, folder, fleet, role, can_notify, runtime, model, effort, permission_mode, mcp, pooled, autostart, resume, debug), plus `pid` and `proc_start` from the preview, optional `profile_id` (adopt into an existing profile), `force` (stop it even mid-turn), and `host` for a row with no machine. 202 `{"profile"}`. 409 `{"error", "code"}` with `code` `busy`, `profile_running`, `runner`, `process_changed`, `several` or `blocked`. 422 `{"errors"}` on invalid profile fields. 504 with code `offline` when the machine's agent is offline or silent. |
 
 ## Failure modes and troubleshooting

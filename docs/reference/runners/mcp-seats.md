@@ -140,14 +140,14 @@ More reserved titles ping on the accounts' usage:
 
 | Title | Pings on |
 |---|---|
-| `@pool` | the pool's current account switching (a failover, a fleet-wide switch) |
+| `@pool` | the pool's current account switching (a failover, a fleet-wide switch); an account needing re-auth (`POOL needs re-auth: …`), and its re-authorization (`POOL re-authorized: …`) |
 | `@pool:reset` | an account's weekly limit resetting |
 | `@pool:reset:session` | an account's 5-hour session limit resetting |
 | `@pool:capped` | an account's weekly limit reaching 100% |
 | `@pool:capped:session` | an account's session limit reaching 100% |
 | `@pool:step:10` | an account's weekly usage crossing a multiple of 10 (10 … 100) |
 | `@pool:step:5` | the same for each multiple of 5 |
-| `@pool:*` | every weekly event above (steps of 5) and the switches |
+| `@pool:*` | every weekly event above (steps of 5), the switches, and the re-auth events |
 
 Each such ping is one line, for example `POOL step: work weekly crossed 90% (now 91%)`; `cv_ack` clears it by the title you watch. Steps are weekly only: session usage refills every 5 hours. See [notifications.md](../server/notifications.md).
 

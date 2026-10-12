@@ -40,3 +40,6 @@ config :claudiverse_server, sidecar_grace_ms: 100
 
 # Tests fire schedules with Scheduler.tick/1 inside their sandbox.
 config :claudiverse_server, ClaudiverseServer.Schedules.Scheduler, enabled: false
+# Auto-resume: no boot or ticks of its own, and the proxy reports nothing,
+# unless a test turns it on; the auto-resume tests boot and tick by hand.
+config :claudiverse_server, ClaudiverseServer.AutoResume, enabled: false, track: false

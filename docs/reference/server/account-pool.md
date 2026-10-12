@@ -22,10 +22,32 @@ An Anthropic refresh response may carry a replacement refresh token. If a client
 1. `POST /api/anthropic_auths/authorize` returns an authorize `url`, a PKCE `verifier` and a `state`. The server stores nothing: the caller (the web panel) must keep `verifier` and `state` and hand them back. The URL is `https://claude.com/cai/oauth/authorize?...` with `code=true`, the Claude Code OAuth client id, `response_type=code`, `redirect_uri=https://platform.claude.com/oauth/code/callback`, `code_challenge_method=S256`, and the scopes `org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload`. Anthropic may grant a subset; the granted scopes are stored and returned with every lease.
 2. The operator opens the URL, signs in as the account to add, approves, and copies the code shown on Anthropic's callback page.
 3. `POST /api/anthropic_auths/complete` with `label`, `code`, `verifier` (and `state`, `priority`). The pasted value normally looks like `code#state`; the server splits at the first `#`. If the paste carries a state and it differs from the `state` you send, the request fails with `state_mismatch`. A bare code with no `#` is accepted.
-4. The server exchanges the code at `https://platform.claude.com/v1/oauth/token`, reads the profile (`https://api.anthropic.com/api/oauth/profile`) for the account email, and reads usage (`https://api.anthropic.com/api/oauth/usage`) before storing anything. A failed profile or usage read is not an error: the email is left empty and no snapshot is stored.
+4. The server exchanges the code at `https://platform.claude.com/v1/oauth/token` and reads usage (`https://api.anthropic.com/api/oauth/usage`) before storing anything. The account the login belongs to (`account_email`, `account_uuid`) is read from the token response's own `account` (`email_address`, `uuid`), where Claude Code reads it too. Only what that leaves out is asked of the profile endpoint (`https://api.anthropic.com/api/oauth/profile`). A profile that names no account is logged with its top-level keys (never values), and a login that names no account at all is logged as a warning. Neither is an error: the identity is left empty, as a failed usage read stores no snapshot. Every token refresh fills the identity in again from the refresh response, so a row enrolled without one gets it within the hour.
 5. The account is stored in one write, upserted by `label`. Its status comes from the longer of (a) any cooldown the same label already has that has not expired and (b) the cooldown the fresh usage reading calls for. So an account enrolled at its limit is stored `cooling_down` and is never leasable, and re-enrolling a cooling account does not clear its cooldown.
 
-Re-enrolling an existing label replaces its credentials in place. It is also how a `needs_reauth` account is recovered.
+Re-enrolling an existing label replaces its credentials in place: the same row, its id and label, and its priority unless the request names one (a new account defaults to 100). It is also how a `needs_reauth` account is recovered. The re-authorize route below does the same keyed by id, and checks that the login is the row's own account.
+
+### Re-authorization
+
+An account whose refresh token was rejected is `needs_reauth` until someone signs in to it again. In one step:
+
+1. `POST /api/anthropic_auths/authorize`, as for an enrolment.
+2. The operator signs in **as that account** and copies the code.
+3. `POST /api/anthropic_auths/:id/reauthorize/complete` with `code`, `verifier` and `state` (app or super token).
+
+The server exchanges the code, reads the login's email and usage, and stores the new credentials in that row: its id, label and priority stay, and so does a cooldown that has not ended (the enrolment rule above). The status then comes from the cooldown and the usage reading, as at enrolment, so the account leaves `needs_reauth`.
+
+The login must be the row's account: re-authorizing `account-a` while signed in to `account-b` would quietly make `account-a` the other account. The check, in order:
+
+1. `force: true`: no check. The login is taken, a deliberate swap; the row keeps its label.
+2. The row has neither `account_uuid` nor `account_email`: no check is possible. The login is taken, and the row stores the login's identity (or none, if the login named none). Rows enrolled before 2026-10-12 had no identity until their next refresh filled it in.
+3. Both the row and the login have an account uuid: they must be equal. The same account under a changed email passes; another account with the same email does not.
+4. Otherwise both have an email: they must be equal, compared case-insensitively.
+5. Otherwise (the row has an identity the login cannot be compared with): refused as `email_unknown`.
+
+A refusal is a 409 naming both sides, and nothing is stored. The code is spent by the exchange, so a retry with `force` needs a fresh authorize.
+
+Every re-enrolment of an existing row, by either route, drops the proxy's cached lease (`Credentials.reset/0`), re-picks the best account (`UsagePoller.reconsider/0`) when the account came back or became another account, and broadcasts a `reauthorized` pool event.
 
 ### Storage
 
@@ -94,8 +116,8 @@ stateDiagram-v2
     cooling_down --> available: cooldown ends
     available --> needs_reauth: refresh rejected
     cooling_down --> needs_reauth: refresh rejected
-    needs_reauth --> available: re-enrol
-    needs_reauth --> cooling_down: re-enrol at the limit
+    needs_reauth --> available: re-enrol or re-authorize
+    needs_reauth --> cooling_down: re-authorize at the limit,<br/>or inside a cooldown
     available --> [*]: DELETE
     cooling_down --> [*]: DELETE
     needs_reauth --> [*]: DELETE
@@ -107,7 +129,8 @@ Notes on the diagram:
 - "Cooldown ends" is either `cooldown_until` passing, or a poll that sees every limit under the threshold. The second only ends cooldowns that a poll set.
 - "Refresh rejected" is a refresh answered with 400, 401 or 403, or an account with no refresh token. "Re-enrol" means enrolling the same label again.
 - "Cooldown passes" needs no write. The pool compares `cooldown_until` with the clock, so the account is leasable again immediately; the stored `status` string catches up on the next write.
-- A needs-reauth account is never picked and never polled. A successful refresh would bring it back, but nothing refreshes it automatically, except a seat calling `POST /:id/unauthorized` for it. Re-enrolment is the normal route.
+- A needs-reauth account is never picked and never polled. A successful refresh would bring it back, but nothing refreshes it automatically, except a seat calling `POST /:id/unauthorized` for it. Re-authorization is the normal route.
+- Becoming `needs_reauth` broadcasts a `needs_reauth` pool event and pings `@pool` watchers, once per transition: the stored status is the state, so a later refresh attempt on the same account, or a restart, announces nothing. The reason ("refresh rejected with HTTP 400", "no refresh token stored") is stored in `cooldown_reason` and listed as `reauth_reason`.
 - When a 429 report names an account that has a longer existing cooldown, the longer one is kept and the reason becomes `<existing reason> (429 reported; kept the longer existing cooldown)`.
 
 ### Cooldown rules
@@ -225,9 +248,24 @@ Every usage reading (the poller's, or **Check usage**) goes through `record_usag
 | `capped` | the percent went from below 100 to 100 or more | `weekly`, `session` |
 | `step` | the weekly percent's highest multiple of `every` (5 or 10) rose; one event for the highest multiple `crossed`. A reset starts the count from 0. | `weekly` |
 
+Two more events say an account left the pool for want of a login and came back. They are not usage readings; each carries `change`, `auth_id`, `label`, `text` and `at`:
+
+| `change` | When | Also carries |
+|---|---|---|
+| `needs_reauth` | the account became `needs_reauth` (its refresh was rejected, or it has no refresh token). Once per transition, never again for an account already marked, nor after a restart. | `reason` |
+| `reauthorized` | an existing account got new credentials (re-authorize, or `complete` under its label). | `was` (its status before), `status` (after), `account_changed` (the login was another account, forced) |
+
+```text
+POOL needs re-auth: account-a (refresh rejected with HTTP 400) — re-authorize in the app
+POOL re-authorized: account-a (available)
+POOL re-authorized: account-a (cooling until Mon 09:59 UTC)
+```
+
 `weekly` is the `weekly_all` limit, `session` the 5-hour one; per-model weekly limits are not watched. Each event carries `change`, `auth_id`, `label`, `limit`, `percent`, `was` (the stored reading's percent), `resets_at`, `every` and `crossed` for a step, `text` (the one-line ping) and `at`. It has no `current_id`, so a client that refetches on every `pool` event still works.
 
 The stored snapshot is the only state, so a crossing fires once, an unchanged reading fires nothing, and the first reading after a restart is compared with the last one before it. Seats subscribe with the `@pool:…` watch titles: see [notifications.md](notifications.md).
+
+Auto-resume listens on the same topic: at every `pool` event, and every 30 s, a seat whose turn died on `no_available_auth` gets one `continue` once `pick/0` finds an account again, and a weekly `reset` re-arms a seat whose `continue` was refused too. See [auto-resume.md](auto-resume.md).
 
 ## Configuration
 
@@ -244,7 +282,7 @@ No `config :claudiverse_server` keys. Fixed constants in code: default 429 coold
 
 ## Interface
 
-All routes are under `/api` and need a Bearer token (the `:authenticated` pipeline). Seat endpoints take any API token; the only role check is on `preferred`. Unknown ids return `404 {"error": "unknown auth"}`. Ids are integers.
+All routes are under `/api` and need a Bearer token (the `:authenticated` pipeline). Seat endpoints take any API token; the only role checks are on `preferred` and `reauthorize/complete`. Unknown ids return `404 {"error": "unknown auth"}`. Ids are integers.
 
 | Method and path | Purpose |
 |---|---|
@@ -254,6 +292,7 @@ All routes are under `/api` and need a Bearer token (the `:authenticated` pipeli
 | `GET /api/anthropic_auths` | List accounts, current account and seat assignments. |
 | `POST /api/anthropic_auths/authorize` | Start enrolment. |
 | `POST /api/anthropic_auths/complete` | Finish enrolment. |
+| `POST /api/anthropic_auths/:id/reauthorize/complete` | Re-authorize this account from a fresh `authorize` (app or super token). |
 | `POST /api/anthropic_auths/:id/usage` | Read usage now. |
 | `POST /api/anthropic_auths/:id/preferred` | Make this account the preferred one (app or super token). |
 | `DELETE /api/anthropic_auths/:id` | Remove an account. |
@@ -311,8 +350,8 @@ curl -s -X POST https://claudiverse.example/api/anthropic_auths/1/rate_limited \
   "current_id": 1,
   "auths": [
     {
-      "id": 1, "label": "account-a", "account_email": "you@example.com",
-      "status": "available", "cooldown_until": null, "cooldown_reason": null,
+      "id": 1, "label": "account-a", "account_email": "you@example.com", "account_uuid": "…",
+      "status": "available", "reauth_reason": null, "cooldown_until": null, "cooldown_reason": null,
       "priority": 10, "scopes": "user:inference user:profile",
       "token_valid": true, "expires_at": "2026-10-10T13:00:00Z",
       "last_refreshed_at": "2026-10-10T12:00:00Z", "last_leased_at": "2026-10-10T12:00:05Z",
@@ -327,7 +366,7 @@ curl -s -X POST https://claudiverse.example/api/anthropic_auths/1/rate_limited \
 }
 ```
 
-`auths` is ordered by priority (first is the preferred account). `status` is derived from `cooldown_until`. Tokens are never included. `seats` is newest assignment first and is not a liveness list.
+`auths` is ordered by priority (first is the preferred account). `status` is derived from `cooldown_until`, except `needs_reauth`. `reauth_reason` is why an account needs re-auth (for example `refresh rejected with HTTP 400`), and null for any other status; the same text is in `cooldown_reason`. `account_email` and `account_uuid` are the account the row's credentials belong to, as the token endpoint named it at enrolment or at the last refresh (null until one has). Tokens are never included. `seats` is newest assignment first and is not a liveness list.
 
 ### Enrol
 
@@ -340,7 +379,7 @@ curl -s -X POST https://claudiverse.example/api/anthropic_auths/complete \
   -d '{"label":"account-a","code":"<pasted code#state>","verifier":"<verifier>","state":"<state>","priority":100}'
 ```
 
-`complete` needs `label`, `code` and `verifier`. `priority` defaults to `100`. Success returns the account in the list shape above. Errors (all 400 unless noted):
+`complete` needs `label`, `code` and `verifier`. Without `priority`, a new account gets `100` and a re-enrolled one keeps its own. Success returns the account in the list shape above. Errors (all 400 unless noted):
 
 | Body | Meaning |
 |---|---|
@@ -348,6 +387,27 @@ curl -s -X POST https://claudiverse.example/api/anthropic_auths/complete \
 | `{"error":"exchange_failed","detail":"Anthropic returned HTTP <n>"}` | Anthropic rejected the code or verifier (expired, already used, wrong). |
 | `{"error":"<inspected reason>"}` | Transport or other failure. |
 | 500 `{"error":"exchange_crashed","detail":"<message>"}` | An exception, for example the vault key is missing ("AnthropicAuths vault key is not set (CV_VAULT_KEY)"). |
+
+### Re-authorize
+
+```bash
+curl -s -X POST https://claudiverse.example/api/anthropic_auths/2/reauthorize/complete \
+  -H "Authorization: Bearer $APP_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"code":"<pasted code#state>","verifier":"<verifier>","state":"<state>"}'
+```
+
+Body: `code` and `verifier` (required), `state`, `force` (boolean; the string `"true"` too). 200 is the account in the list shape, with its own id, label and priority. Errors:
+
+| Status and body | Meaning |
+|---|---|
+| 409 `{"error":"account_mismatch","stored_email":"a@example.com","signed_in_email":"b@example.com","stored_account_uuid":"…","signed_in_account_uuid":"…","detail":"…"}` | The login is another account. Nothing was changed. Sign in as the stored account, or authorize again and send `force: true` to make this row the other account. Either email may be null when the uuids decided. |
+| 409 `{"error":"email_unknown","stored_email":"a@example.com","signed_in_email":null,"stored_account_uuid":"…","signed_in_account_uuid":null,"detail":"…"}` | The login could not be compared with the row's account. Nothing was changed. `force: true` skips the check. |
+| 403 `{"error":"forbidden","detail":"re-authorizing an account is app-only"}` | An `api` token. |
+| 404 `{"error":"unknown auth"}` | No account with this id. |
+| 400 `{"error":"bad_request","detail":"code and verifier are required"}` | |
+| 400 `state_mismatch`, `exchange_failed`, other; 500 `exchange_crashed` | As for `complete`. |
+
+`detail` is a sentence to show the operator.
 
 ### Usage, preferred, delete
 
@@ -375,6 +435,7 @@ curl -s -X POST https://claudiverse.example/api/anthropic_auths/complete \
 ## Related pages
 
 - [The API proxy](api-proxy.md): how pooled seats' requests use leased credentials.
+- [Auto-resume](auto-resume.md): a seat whose turn died on an empty pool gets one `continue` when an account is leasable again.
 - [Notifications Router, pings and cv_subscribe](notifications.md): `operator:events` and the `@pool` watch title.
 - [Configuration](configuration.md): all environment variables.
 - [Accounts, sign-up and tokens](auth.md): token contexts (`api`, `app`, `super`).

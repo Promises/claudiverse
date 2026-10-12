@@ -165,7 +165,7 @@ Purpose: one record per managed seat, started by its machine's host agent. Schem
 | `runtime` | string | not null, default `"stock+mod"` |
 | `model` | string | null |
 | `effort` | string | null |
-| `permission_mode` | string | not null, default `"default"` |
+| `permission_mode` | string | not null, default `"auto"` (`"default"` before `profiles_permission_mode_defaults_to_auto`) |
 | `mcp` | `{:array, :string}` | not null, default `[]` |
 | `pooled` | boolean | not null, default `false` in the migration; **`true` in the Ecto schema** (see Notes below) |
 | `autostart` | boolean | not null, default `false` |
@@ -576,6 +576,7 @@ Purpose: the server-managed pool of Anthropic subscription accounts with failove
 |---|---|---|
 | `label` | string | not null |
 | `account_email` | string | null |
+| `account_uuid` | string | null. The account's stable id, from the token response; what re-authorization checks a login against |
 | `access_token`, `refresh_token` | binary | null (stored encrypted) |
 | `expires_at` | utc_datetime | null |
 | `scopes` | string | null |
@@ -646,6 +647,29 @@ Purpose: one row per firing of a schedule. Schema `Schedules.Run`.
 
 Indexes: `(schedule_id, due_at)`; `(status)`.
 
+## Auto-resume
+
+### `seat_stalls`
+
+Purpose: one row per seat whose model calls pass the API proxy: whether a response is streaming to it now, and whether its last model call died (an empty pool, a restart that cut the stream) until its `continue` is sent. Schema `AutoResume.Stall`, context `AutoResume`. Feature page: [auto-resume.md](auto-resume.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `seat_title` | string | not null |
+| `claude_session_id` | string | null. Of the seat's last model call |
+| `in_flight` | boolean | not null, `false`. A response is streaming to the seat |
+| `state` | string | not null, `"clear"`: `clear`, `stalled` or `nudged` |
+| `reason` | string | null: `no_available_auth` or `server_restart` while an incident is open |
+| `detail` | string | null |
+| `stalled_at` | utc_datetime | null. When the incident opened |
+| `waiting` | string | null: `grace`, `pool`, `seat` or `busy` for a stalled row |
+| `nudged_at` | utc_datetime | null. The last `continue` |
+| `nudged_session_id` | integer | null. The session row it reached. No foreign key |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, seat_title)`; `(state)`; `(in_flight)`.
+
 ## App builds
 
 ### `app_builds`
@@ -694,6 +718,7 @@ Everything below is created from the supervision tree in `application.ex` (or fr
 | `Setup` | The first account's one-time setup code | The code; a new one is generated at every boot while no user exists |
 | `Runners` | Runner slot registry built from heartbeats | All slots, until each runner's next heartbeat (about 30 seconds) |
 | `Schedules.Scheduler` | Its 30-second timer, and the targets of pending runs (a cache of `schedule_runs`) | Nothing durable: the first tick at boot fires what came due during the downtime (once, late) and reloads the targets |
+| `AutoResume.Server` | How many responses stream to each seat now, the open incidents (a cache of `seat_stalls`), whether the server is stopping | The counts, on purpose: a row still `in_flight` at boot is a stream the restart cut, and becomes a restart incident |
 | `Hosts` plus `Hosts.Registry` and `Hosts.Requests` (from `Hosts.child_specs/0`) | Which host agents are connected, pending relayed requests, spawn rate-limit bookkeeping | Presence and in-flight requests; agents reconnect and re-register |
 | `Phoenix.PubSub`, `Telemetry`, `DNSCluster`, `Endpoint` | Channel subscriptions, metrics, sockets | All connections; clients reconnect |
 
@@ -747,6 +772,9 @@ Migrations run automatically at boot in a release: `application.ex` starts `Ecto
 | `20261006020000_add_notify_grant_to_sessions` | `sessions.notify_grant`, `notify_until` |
 | `20261006030000_rebuild_kb_revisions_fts_without_title` | Drops and recreates `kb_revisions_fts` (and its triggers) without the phantom `title` column, then runs FTS5 `'rebuild'` |
 | `20261011120000_create_schedules` | `schedules`, `schedule_runs` and their indexes |
+| `20261011180000_create_seat_stalls` | `seat_stalls` and its indexes |
+| `20261012060000_add_account_uuid_to_anthropic_auths` | `anthropic_auths.account_uuid` |
+| `20261012090000_profiles_permission_mode_defaults_to_auto` | Rebuilds `profiles` with `permission_mode` defaulting to `"auto"` (SQLite cannot change a column default in place): the same columns, constraints and index, every row copied as it was, the AUTOINCREMENT counter kept. Existing rows keep their mode. |
 
 Notes on running them:
 

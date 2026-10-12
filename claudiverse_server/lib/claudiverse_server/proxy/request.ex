@@ -42,6 +42,26 @@ defmodule ClaudiverseServer.Proxy.Request do
     end
   end
 
+  @doc """
+  Whether a model request is the main loop's own (a turn's call or its
+  compaction), the calls whose failure ends a turn: not a subagent's, nor a
+  session title, a prompt suggestion or the startup quota probe. Read without
+  decoding the body, which is on the request's path: upstream's
+  `x-claude-code-request-class` when the seat sends it, else whether the body
+  carries tools (the main loop sends ~110; titling, suggestions and the probe
+  send none). Claude Code writes JSON without spaces, and a `"` inside a string
+  value is escaped, so `"tools":[{` is a key of the request itself.
+  """
+  def main_loop?(headers, body) do
+    hint = header(headers, "x-claude-code-request-class")
+
+    cond do
+      header(headers, "x-claude-code-agent-id") not in [nil, ""] -> false
+      hint not in [nil, ""] -> hint in ["main", "compaction"]
+      true -> :binary.match(body, ~s("tools":[{)) != :nomatch
+    end
+  end
+
   @doc "The account a request is billed to, from `metadata.user_id` (a JSON string)."
   def account(%{"metadata" => %{"user_id" => uid}}) when is_binary(uid) do
     case Jason.decode(uid) do

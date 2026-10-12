@@ -17,6 +17,18 @@ defmodule ClaudiverseServer.AnthropicAuthEnrolmentUsageTest do
 
   @tokens %{"access_token" => "enrolled-access", "refresh_token" => "enrolled-refresh", "expires_in" => 3600}
 
+  # A re-enrolment that changes whether the account is leasable nudges the
+  # usage poller, which reads the pool: let it into this test's sandbox, and
+  # let it finish before the test ends.
+  setup do
+    if poller = Process.whereis(ClaudiverseServer.AnthropicAuths.UsagePoller) do
+      Ecto.Adapters.SQL.Sandbox.allow(Repo, self(), poller)
+      on_exit(fn -> :sys.get_state(poller) end)
+    end
+
+    :ok
+  end
+
   defp in_seconds(s), do: DateTime.utc_now() |> DateTime.add(s, :second) |> DateTime.truncate(:second)
 
   defp usage(weekly_pct, weekly_reset \\ in_seconds(2 * 86_400)) do

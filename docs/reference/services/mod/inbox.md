@@ -26,7 +26,7 @@ stateDiagram-v2
 | Parameter | Value |
 |---|---|
 | `wait` | Always `25` (seconds). |
-| `event` | `SessionStart`, only on the first poll after the seat goes online. Later polls, the poll restarted by `/rename`, and polls after an outage carry no `event`. |
+| `event` | `SessionStart`, only on the first poll after the seat goes online. `Stop` on each retry after a failed poll while no turn is running (0.11.0+): a server that restarted reads the seat as idle from it. Other polls carry no `event`. |
 | `host` | The seat's host, when known. |
 | `fleet` | The seat's fleet, when set. |
 | `origin` | The seat's origin, when set. |

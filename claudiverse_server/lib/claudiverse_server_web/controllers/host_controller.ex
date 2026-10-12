@@ -262,9 +262,10 @@ defmodule ClaudiverseServerWeb.HostController do
       else: halt(conn, :bad_request, "title must be 1-64 of A-Z a-z 0-9 . _ -")
   end
 
-  # The mode the app gave, else the seat's last mode if a normal one, else default.
+  # The mode the app gave, else the seat's last mode if a normal one, else
+  # auto, as a spawn and a new profile get.
   defp resume_mode(conn, session, nil),
-    do: resume_mode(conn, session, if(session.permission_mode in @modes, do: session.permission_mode, else: "default"))
+    do: resume_mode(conn, session, if(session.permission_mode in @modes, do: session.permission_mode, else: "auto"))
 
   defp resume_mode(conn, _session, mode) do
     if mode in @modes,

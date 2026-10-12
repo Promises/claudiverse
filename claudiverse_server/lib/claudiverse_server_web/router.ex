@@ -113,6 +113,7 @@ defmodule ClaudiverseServerWeb.Router do
     get "/anthropic_auths", AnthropicAuthController, :index
     post "/anthropic_auths/authorize", AnthropicAuthController, :authorize
     post "/anthropic_auths/complete", AnthropicAuthController, :complete
+    post "/anthropic_auths/:id/reauthorize/complete", AnthropicAuthController, :reauthorize
     post "/anthropic_auths/:id/usage", AnthropicAuthController, :refresh_usage
     delete "/anthropic_auths/:id", AnthropicAuthController, :delete
     post "/anthropic_auths/:id/preferred", AnthropicAuthController, :preferred

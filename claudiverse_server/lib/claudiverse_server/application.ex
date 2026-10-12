@@ -47,6 +47,9 @@ defmodule ClaudiverseServer.Application do
       ClaudiverseServer.Runners,
       # Scheduled prompts: fires due schedules every 30 s, and first at boot.
       ClaudiverseServer.Schedules.Scheduler,
+      # A seat whose turn died on an empty pool or a restart gets one
+      # "continue" when the server can serve it again (AutoResume).
+      ClaudiverseServer.AutoResume.Server,
     ] ++ ClaudiverseServer.Hosts.child_specs() ++ [
       ClaudiverseServerWeb.Endpoint
     ]
@@ -62,6 +65,14 @@ defmodule ClaudiverseServer.Application do
     ClaudiverseServer.IncidentLog.attach()
 
     Supervisor.start_link(children, opts)
+  end
+
+  # Before the tree stops: a response still streaming through the proxy now is
+  # cut by this stop, and must read in flight at the next boot (AutoResume).
+  @impl true
+  def prep_stop(state) do
+    ClaudiverseServer.AutoResume.Server.shutting_down()
+    state
   end
 
   # Tell Phoenix to update the endpoint configuration

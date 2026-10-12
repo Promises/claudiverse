@@ -300,25 +300,108 @@ defmodule ClaudiverseServer.AnthropicAuths do
   """
   def complete_authorization(label, pasted_code, verifier, state, attrs \\ %{}) do
     with {:ok, tokens} <- OAuth.exchange_code(pasted_code, verifier, state) do
-      email =
-        case OAuth.profile(tokens["access_token"]) do
-          {:ok, %{"account" => %{"email_address" => e}}} -> e
-          {:ok, %{"email_address" => e}} -> e
-          _ -> nil
-        end
+      login = login_identity(tokens)
+      store_enrolment(label, tokens, login.email, enrolment_usage(tokens), Map.put(attrs, :account_uuid, login.uuid))
+    end
+  end
 
-      # Read usage BEFORE storing, so an account enrolled at its limit is
-      # stored cooling_down and is never leasable, not even until the next poll
-      # (MEASURED 2026-10-10: an account enrolled at weekly 100% read available
-      # for its first minute). A failed read stores no snapshot and changes
-      # nothing: unknown is not exhausted.
-      usage =
-        case OAuth.usage(tokens["access_token"]) do
-          {:ok, u} -> u
-          _ -> nil
-        end
+  @doc """
+  Re-authorize the account `auth` from a pasted code (the verifier and state of
+  a `start_authorization/0`): new credentials in the same row, so its id,
+  label and priority stay, and its cooldown with them. See
+  `store_reauthorization/5`.
+  """
+  def reauthorize(%AnthropicAuth{} = auth, pasted_code, verifier, state, opts \\ []) do
+    with {:ok, tokens} <- OAuth.exchange_code(pasted_code, verifier, state) do
+      store_reauthorization(auth, tokens, login_identity(tokens), enrolment_usage(tokens), opts)
+    end
+  end
 
-      store_enrolment(label, tokens, email, usage, attrs)
+  @doc """
+  Store a re-authorization of `auth` (`tokens` from the code exchange, `login`
+  the `%{email, uuid}` of the account signed in, `usage` read with them).
+
+  The login must be the row's own account: re-authorizing "Personal" while
+  signed in to Work would quietly make "Personal" Work. The account uuid
+  decides when both sides have one, else the email (case-insensitive). Another
+  account is `{:error, {:account_mismatch, row, login}}` (each an
+  `%{email, uuid}`); a login that named no account the row could be compared
+  with is `{:error, {:email_unknown, row}}`; nothing is stored. `force: true`
+  takes the login all the same (a deliberate swap). A row with neither an email
+  nor a uuid on record has nothing to compare: the check is skipped and the
+  row takes the login's identity.
+  """
+  def store_reauthorization(%AnthropicAuth{} = auth, tokens, login, usage, opts \\ []) do
+    row = %{email: auth.account_email, uuid: auth.account_uuid}
+
+    with :ok <- same_account(row, login, Keyword.get(opts, :force, false)) do
+      store_enrolment(auth.label, tokens, login.email, usage, %{priority: auth.priority, account_uuid: login.uuid})
+    end
+  end
+
+  defp same_account(_row, _login, true), do: :ok
+  defp same_account(%{email: nil, uuid: nil}, _login, _force), do: :ok
+
+  defp same_account(%{uuid: u1} = row, %{uuid: u2} = login, _force) when is_binary(u1) and is_binary(u2),
+    do: if(u1 == u2, do: :ok, else: {:error, {:account_mismatch, row, login}})
+
+  defp same_account(%{email: e1} = row, %{email: e2} = login, _force) when is_binary(e1) and is_binary(e2),
+    do: if(normal_email(e1) == normal_email(e2), do: :ok, else: {:error, {:account_mismatch, row, login}})
+
+  defp same_account(row, _login, _force), do: {:error, {:email_unknown, row}}
+
+  defp normal_email(e), do: e |> String.trim() |> String.downcase()
+
+  @doc """
+  The account `tokens` belong to, `%{email, uuid}`: the token response's own
+  `account` (`email_address`, `uuid`), which is where Claude Code reads it
+  (its formatTokens' tokenAccount), else the profile endpoint's. MEASURED
+  2026-10-12: every pool row's email was empty; the profile read was the only
+  source, and its answer matched neither shape we read, with nothing logged.
+  """
+  def login_identity(tokens) do
+    case account_of(tokens) do
+      %{email: e, uuid: u} = id when is_binary(e) and is_binary(u) -> id
+      id -> fill_from_profile(id, tokens["access_token"])
+    end
+  end
+
+  @doc "The `%{email, uuid}` a token response names (nil for what it does not)."
+  def account_of(%{"account" => %{} = a}),
+    do: %{email: string_or_nil(a["email_address"]), uuid: string_or_nil(a["uuid"])}
+
+  def account_of(_tokens), do: %{email: nil, uuid: nil}
+
+  defp fill_from_profile(id, access_token) do
+    profile =
+      case OAuth.profile(access_token) do
+        {:ok, %{"account" => %{} = a}} -> %{email: string_or_nil(a["email_address"]), uuid: string_or_nil(a["uuid"])}
+        {:ok, %{"email_address" => e}} -> %{email: string_or_nil(e), uuid: nil}
+        # Keys only, never values: this is how the shape is learned next time.
+        {:ok, %{} = other} -> Logger.info("[anthropic_auths] the profile named no account; its keys: #{inspect(Map.keys(other))}") && %{email: nil, uuid: nil}
+        _ -> %{email: nil, uuid: nil}
+      end
+
+    filled = %{email: id.email || profile.email, uuid: id.uuid || profile.uuid}
+
+    if filled.email == nil and filled.uuid == nil,
+      do: Logger.warning("[anthropic_auths] the login named no account (token response or profile): a re-authorization cannot check it is the same account")
+
+    filled
+  end
+
+  defp string_or_nil(v) when is_binary(v) and v != "", do: v
+  defp string_or_nil(_), do: nil
+
+  # Read usage BEFORE storing, so an account enrolled at its limit is stored
+  # cooling_down and is never leasable, not even until the next poll (MEASURED
+  # 2026-10-10: an account enrolled at weekly 100% read available for its first
+  # minute). A failed read stores no snapshot and changes nothing: unknown is
+  # not exhausted.
+  defp enrolment_usage(tokens) do
+    case OAuth.usage(tokens["access_token"]) do
+      {:ok, u} -> u
+      _ -> nil
     end
   end
 
@@ -326,6 +409,12 @@ defmodule ClaudiverseServer.AnthropicAuths do
   Store an enrolled account (`tokens` from the code exchange) in ONE write,
   with its status from both an existing cooldown and the `usage` read at
   enrolment: whichever cooldown lasts longer wins.
+
+  Under a label that exists this is a re-enrolment: the same row gets the new
+  credentials, keeps its priority unless `attrs` names one (a new account
+  defaults to 100), and leaves needs_reauth. Then the proxy drops its cached
+  lease, the poller re-picks the best account (seats move back to it), and a
+  `reauthorized` pool event is broadcast and pinged to `@pool` watchers.
   """
   def store_enrolment(label, tokens, email, usage, attrs \\ %{}) do
     # 🔴 DO NOT CLEAR AN ACTIVE COOLDOWN ON RE-ENROLMENT.
@@ -343,9 +432,11 @@ defmodule ClaudiverseServer.AnthropicAuths do
     kept =
       case existing do
         %AnthropicAuth{cooldown_until: until} = e when not is_nil(until) ->
-          # Still cooling: keep it, and keep why.
+          # Still cooling: keep it, and keep why. A row that needed re-auth
+          # holds that reason instead (mark_needs_reauth/2 writes it there).
           if DateTime.compare(until, DateTime.utc_now()) == :gt,
-            do: %{status: "cooling_down", cooldown_until: until, cooldown_reason: e.cooldown_reason}
+            do: %{status: "cooling_down", cooldown_until: until,
+                  cooldown_reason: if(e.status == "needs_reauth", do: "cooldown kept through re-authorization", else: e.cooldown_reason)}
 
         _ ->
           nil
@@ -355,24 +446,69 @@ defmodule ClaudiverseServer.AnthropicAuths do
 
     cooldown_attrs =
       case Enum.reject([kept, measured], &is_nil/1) do
-        [] -> %{status: "available", cooldown_until: nil}
+        # No cooldown: no reason either (a needs_reauth row's would linger).
+        [] -> %{status: "available", cooldown_until: nil, cooldown_reason: nil}
         list -> Enum.max_by(list, &DateTime.to_unix(&1.cooldown_until))
       end
 
     usage_attrs =
       if usage, do: %{usage_snapshot: usage, usage_checked_at: DateTime.truncate(DateTime.utc_now(), :second)}, else: %{}
 
-    attrs
-    |> Map.merge(%{
-      label: label,
-      account_email: email,
-      scopes: tokens["scope"]
-    })
-    |> Map.merge(token_attrs(tokens, nil))
-    |> Map.merge(usage_attrs)
-    # Last, so nothing can overwrite it: this is the guard above.
-    |> Map.merge(cooldown_attrs)
-    |> upsert_by_label(label)
+    # MEASURED 2026-10-12: the panel re-enrolled Personal with no priority and
+    # it dropped from 10 to 100, behind every other account.
+    priority = Map.get(attrs, :priority) || (existing && existing.priority) || 100
+
+    stored =
+      attrs
+      |> Map.put(:priority, priority)
+      |> Map.merge(%{
+        label: label,
+        account_email: email,
+        scopes: tokens["scope"]
+      })
+      |> Map.merge(token_attrs(tokens, nil))
+      |> Map.merge(usage_attrs)
+      # Last, so nothing can overwrite it: this is the guard above.
+      |> Map.merge(cooldown_attrs)
+      |> upsert_by_label(label)
+
+    with {:ok, auth} <- stored, %AnthropicAuth{} <- existing, do: reauthorized(existing, auth)
+    stored
+  end
+
+  # New credentials in an existing row: leases pick them up at once, and when
+  # the account came back (from needs_reauth, or out of a cooldown) or is now
+  # another account, the best account is chosen again: it may be the preferred
+  # one, and seats move back to it.
+  defp reauthorized(%AnthropicAuth{} = before, %AnthropicAuth{} = auth) do
+    swapped =
+      case same_account(%{email: before.account_email, uuid: before.account_uuid}, %{email: auth.account_email, uuid: auth.account_uuid}, false) do
+        {:error, {:account_mismatch, _, _}} -> true
+        _ -> false
+      end
+
+    ClaudiverseServer.Proxy.Credentials.reset()
+
+    if AnthropicAuth.leasable?(before) != AnthropicAuth.leasable?(auth) or swapped,
+      do: ClaudiverseServer.AnthropicAuths.UsagePoller.reconsider()
+
+    state =
+      if auth.status == "cooling_down" and auth.cooldown_until,
+        do: "cooling until #{Calendar.strftime(auth.cooldown_until, "%a %H:%M")} UTC",
+        else: auth.status
+
+    event = %{
+      "change" => "reauthorized",
+      "auth_id" => auth.id,
+      "label" => auth.label,
+      "was" => before.status,
+      "status" => auth.status,
+      "account_changed" => swapped == true,
+      "text" => "POOL re-authorized: #{auth.label} (#{state}#{if swapped, do: "; now a different account", else: ""})"
+    }
+
+    Logger.info("[anthropic_auths] #{event["text"]}")
+    Phoenix.PubSub.broadcast(ClaudiverseServer.PubSub, pool_topic(), {"pool", Map.put(event, "at", now_iso())})
   end
 
   # --- internals ------------------------------------------------------------
@@ -512,7 +648,7 @@ defmodule ClaudiverseServer.AnthropicAuths do
   def apply_refresh(%AnthropicAuth{} = auth, tokens) do
     prior = AnthropicAuth.decrypt_refresh_token(auth)
 
-    update_auth(auth, Map.merge(token_attrs(tokens, prior), refreshed_status(auth)))
+    update_auth(auth, token_attrs(tokens, prior) |> Map.merge(refreshed_status(auth)) |> Map.merge(identity_attrs(tokens)))
   end
 
   # 🔑 KEEP THE OLD REFRESH TOKEN WHEN THE RESPONSE OMITS ONE.
@@ -544,6 +680,17 @@ defmodule ClaudiverseServer.AnthropicAuths do
     }
   end
 
+  # A refresh response names the account as an exchange does: rows enrolled
+  # before the identity was read from it get theirs on their next refresh. The
+  # same refresh token is the same account, so it is written as given; what
+  # the response leaves out is left as it was.
+  defp identity_attrs(tokens) do
+    case account_of(tokens) do
+      %{email: nil, uuid: nil} -> %{}
+      id -> for {k, v} <- [account_email: id.email, account_uuid: id.uuid], v != nil, into: %{}, do: {k, v}
+    end
+  end
+
   # The status string is a render cache of the timestamp. A successful refresh
   # is the one event that legitimately clears needs_reauth — and only that; an
   # account still inside its cooldown stays cooling_down.
@@ -555,9 +702,30 @@ defmodule ClaudiverseServer.AnthropicAuths do
 
   defp refreshed_status(_), do: %{status: "available"}
 
+  # The status is the only state: an account that already needs re-auth (a
+  # Check usage, a 401 report on it) changes nothing and announces nothing, and
+  # after a restart the stored status is already needs_reauth. So the
+  # `needs_reauth` pool event, and its ping to `@pool` watchers, fires once per
+  # transition.
   defp mark_needs_reauth(auth, reason) do
-    Logger.error("[anthropic_auths] #{auth.label} needs re-auth: #{reason}")
-    update_auth(auth, %{status: "needs_reauth", cooldown_reason: reason})
+    {n, _} =
+      from(a in AnthropicAuth, where: a.id == ^auth.id and a.status != "needs_reauth")
+      |> Repo.update_all(set: [status: "needs_reauth", cooldown_reason: reason, updated_at: DateTime.truncate(DateTime.utc_now(), :second)])
+
+    if n == 1 do
+      Logger.error("[anthropic_auths] #{auth.label} needs re-auth: #{reason}")
+
+      event = %{
+        "change" => "needs_reauth",
+        "auth_id" => auth.id,
+        "label" => auth.label,
+        "reason" => reason,
+        "text" => "POOL needs re-auth: #{auth.label} (#{reason}) — re-authorize in the app"
+      }
+
+      Phoenix.PubSub.broadcast(ClaudiverseServer.PubSub, pool_topic(), {"pool", Map.put(event, "at", now_iso())})
+    end
+
     {:error, :needs_reauth}
   end
 

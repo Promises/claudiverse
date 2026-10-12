@@ -36,16 +36,17 @@ Notes:
 
 | Title | Pings on |
 |---|---|
-| `@pool` | the pool's current account switching (a failover, a fleet-wide switch) |
+| `@pool` | the pool's current account switching (a failover, a fleet-wide switch); an account needing re-auth, and its re-authorization |
 | `@pool:reset` | an account's weekly limit resetting |
 | `@pool:reset:session` | an account's 5-hour session limit resetting |
 | `@pool:capped` | an account's weekly limit reaching 100% |
 | `@pool:capped:session` | an account's session limit reaching 100% |
 | `@pool:step:10` | an account's weekly usage crossing a multiple of 10 (10 … 100) |
 | `@pool:step:5` | the same for each multiple of 5 |
-| `@pool:*` | every weekly event above (steps of 5) and the switches |
+| `@pool:*` | every weekly event above (steps of 5), the switches, and the re-auth events |
 
   The events come from `AnthropicAuths.PoolEvents`, which compares each usage reading with the stored one (see [account-pool.md](account-pool.md#pool-events)). The ping is the event's `text`, for example `POOL reset: work weekly 94% → 0% (next reset Sun 2026-10-18 09:59 UTC)`, `POOL capped: personal weekly 100%, cooling until Mon 2026-10-12 00:00 UTC`, `POOL step: work weekly crossed 90% (now 91%)`.
+- An account becoming `needs_reauth`, and an existing account getting new credentials, ping the listeners watching `@pool` or `@pool:*` with the event's `text`: `POOL needs re-auth: Personal (refresh rejected with HTTP 400) — re-authorize in the app` (once per transition, never after a restart) and `POOL re-authorized: Personal (available)`. They are acked with `@pool`. See [account-pool.md](account-pool.md#pool-events).
 - A `pool` ping is sent only to listeners whose watch set contains `@pool` or `@pool:*`, and only when the current account id differs from the Router's remembered `pool_current` (a failover, a preference change that moved the account, an upgrade back). A change that leaves the same account current pings nobody. The ping names both accounts by label (`no account (none leasable)` when there is none, `account <id>` if the label is unknown). See [account-pool.md](account-pool.md).
 
 ### Queue, flush and idle
@@ -64,6 +65,7 @@ Flush triggers:
 - `went_idle(session_id)`: the `Room` calls this when its seat reports idle (the `idle` frame, an inbox hint `SessionStart`/`Stop`/`Notification`, or a state reconcile that finds the seat idle). If no listener has that session id yet, the Router looks up the session's title and rebinds a rehydrated listener by title.
 - `seat_seen(title, session_id)`: called when a sidecar joins `session:<id>` as `sidecar` and on every inbox poll. It rebinds the listener to that session id and flushes any queued pings, so a seat that was already idle across a server restart does not wait for its next finished turn.
 - Both also tell `Schedules.Scheduler`, which delivers a scheduled prompt queued for that seat (busy at fire time) or held for its title (absent at fire time). See [schedules.md](schedules.md).
+- And `AutoResume.Server`, which sends a stalled seat its `continue` (its turn died on an empty pool or a restart). See [auto-resume.md](auto-resume.md).
 
 Delivered text has this shape (items joined by `; `):
 

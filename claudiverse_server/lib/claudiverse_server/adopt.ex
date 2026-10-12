@@ -238,7 +238,7 @@ defmodule ClaudiverseServer.Adopt do
       "runtime" => runtime,
       "model" => nil,
       "effort" => nil,
-      "permission_mode" => session.permission_mode || "default",
+      "permission_mode" => session.permission_mode || "auto",
       "mcp" => ["claudiverse"],
       # Pooled by default (the preferred account, with failover). Not for a
       # patched seat: that binary leases from the same pool itself, and it has

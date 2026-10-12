@@ -107,10 +107,68 @@ defmodule ClaudiverseServerWeb.AnthropicAuthController do
     json(conn, AnthropicAuths.start_authorization())
   end
 
+  # Without a priority, a new account gets 100 and a re-enrolled one keeps its
+  # own (AnthropicAuths.store_enrolment/5).
   def complete(conn, %{"label" => label, "code" => code, "verifier" => verifier} = params) do
-    case AnthropicAuths.complete_authorization(label, code, verifier, params["state"], %{
-           priority: to_int(params["priority"]) || 100
-         }) do
+    conn
+    |> enrolled(AnthropicAuths.complete_authorization(label, code, verifier, params["state"], %{priority: to_int(params["priority"])}))
+  rescue
+    e -> exchange_crashed(conn, e)
+  end
+
+  @doc """
+  `POST /api/anthropic_auths/:id/reauthorize/complete` — re-authorize that
+  account in one step, from a code begun at `POST /api/anthropic_auths/authorize`:
+  `{code, verifier, state, force}`. The row keeps its id, label and priority
+  (AnthropicAuths.reauthorize/5). A login whose email is not the row's is a 409
+  naming both, and nothing is stored, unless `force` is true. App or super
+  token: it replaces a credential the whole fleet leases.
+  """
+  def reauthorize(conn, %{"id" => id, "code" => code, "verifier" => verifier} = params) do
+    cond do
+      not ClaudiverseServer.Accounts.app_powers?(conn.assigns[:token_context]) ->
+        conn |> put_status(:forbidden) |> json(%{error: "forbidden", detail: "re-authorizing an account is app-only"})
+
+      auth = AnthropicAuths.get_auth(id) ->
+        result = AnthropicAuths.reauthorize(auth, code, verifier, params["state"], force: params["force"] in [true, "true"])
+
+        case result do
+          {:error, {:account_mismatch, stored, signed_in}} ->
+            conn
+            |> put_status(:conflict)
+            |> json(%{error: "account_mismatch", stored_email: stored.email, signed_in_email: signed_in.email,
+                      stored_account_uuid: stored.uuid, signed_in_account_uuid: signed_in.uuid,
+                      detail: "#{auth.label} is #{who(stored)}, but this login is #{who(signed_in)}. Nothing was changed. " <>
+                                "Sign in as #{who(stored)}, or send force=true to make #{auth.label} #{who(signed_in)}."})
+
+          {:error, {:email_unknown, stored}} ->
+            conn
+            |> put_status(:conflict)
+            |> json(%{error: "email_unknown", stored_email: stored.email, signed_in_email: nil,
+                      stored_account_uuid: stored.uuid, signed_in_account_uuid: nil,
+                      detail: "could not tell which account this login is, to check it is #{who(stored)}. Nothing was changed. " <>
+                                "Send force=true to re-authorize #{auth.label} without the check."})
+
+          other ->
+            enrolled(conn, other)
+        end
+
+      true ->
+        conn |> put_status(:not_found) |> json(%{error: "unknown auth"})
+    end
+  rescue
+    e -> exchange_crashed(conn, e)
+  end
+
+  def reauthorize(conn, _params),
+    do: conn |> put_status(:bad_request) |> json(%{error: "bad_request", detail: "code and verifier are required"})
+
+  defp who(%{email: e}) when is_binary(e), do: e
+  defp who(%{uuid: u}) when is_binary(u), do: "account #{u}"
+  defp who(_), do: "an unknown account"
+
+  defp enrolled(conn, result) do
+    case result do
       {:ok, auth} ->
         json(conn, render_auth(auth))
 
@@ -127,19 +185,20 @@ defmodule ClaudiverseServerWeb.AnthropicAuthController do
       {:error, reason} ->
         conn |> put_status(:bad_request) |> json(%{error: inspect(reason)})
     end
-  rescue
-    # 🔴 An unhandled raise here reaches the panel as a bare HTTP 500 with no
-    # body, which is the least useful thing a failing enrolment can do — the
-    # operator is left with a dead form and nothing to act on. Report the reason.
-    # (First production failure was :inets missing from the release; the message
-    # said nothing at all.)
-    e ->
-      require Logger
-      Logger.error("anthropic_auths complete raised: #{Exception.message(e)}")
+  end
 
-      conn
-      |> put_status(:internal_server_error)
-      |> json(%{error: "exchange_crashed", detail: Exception.message(e)})
+  # 🔴 An unhandled raise here reaches the panel as a bare HTTP 500 with no
+  # body, which is the least useful thing a failing enrolment can do — the
+  # operator is left with a dead form and nothing to act on. Report the reason.
+  # (First production failure was :inets missing from the release; the message
+  # said nothing at all.)
+  defp exchange_crashed(conn, e) do
+    require Logger
+    Logger.error("anthropic_auths enrolment raised: #{Exception.message(e)}")
+
+    conn
+    |> put_status(:internal_server_error)
+    |> json(%{error: "exchange_crashed", detail: Exception.message(e)})
   end
 
   def refresh_usage(conn, %{"id" => id}) do
@@ -192,7 +251,11 @@ defmodule ClaudiverseServerWeb.AnthropicAuthController do
       id: a.id,
       label: a.label,
       account_email: a.account_email,
+      account_uuid: a.account_uuid,
       status: effective_status(a),
+      # Why it needs re-auth (e.g. "refresh rejected with HTTP 400"); null
+      # otherwise. The same text is in cooldown_reason, where older clients read it.
+      reauth_reason: if(a.status == "needs_reauth", do: a.cooldown_reason),
       cooldown_until: a.cooldown_until,
       cooldown_reason: a.cooldown_reason,
       priority: a.priority,

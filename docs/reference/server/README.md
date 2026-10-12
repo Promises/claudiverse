@@ -31,6 +31,7 @@ flowchart TB
     kb["Knowledge store,<br/>submissions, builds"]
     tasks["Tasks and runners"]
     sched["Scheduled prompts"]
+    resume["Auto-resume"]
     ops["Health, incident and<br/>slow-query logs"]
   end
 
@@ -51,6 +52,8 @@ flowchart TB
   sched -- "prompt (reject-busy)" --> rooms
   proxy --> pool
   proxy --> anthropic
+  proxy -- "streams, refusals" --> resume
+  resume -- "continue (reject-busy)" --> rooms
   pool -- "OAuth refresh, usage" --> anthropic
 ```
 
@@ -75,6 +78,7 @@ flowchart TB
 | [profiles-and-hosts.md](profiles-and-hosts.md) | Host agents and the `host:<name>` channel, spawn/stop/resume, profiles, rename, adopt |
 | [account-pool.md](account-pool.md) | Anthropic account enrolment, the vault, refresh, the usage poller, cooling, lease and failover |
 | [api-proxy.md](api-proxy.md) | The `/proxy` relay to the Anthropic API, pooled credentials, the traffic observer |
+| [auto-resume.md](auto-resume.md) | One `continue` for a seat whose turn died on an empty pool or a server restart that cut its stream |
 | [auth.md](auth.md) | Users, token contexts (`api`, `app`, `super`, `host:`), setup-code sign-up, login throttle |
 
 ### Coordination and knowledge
