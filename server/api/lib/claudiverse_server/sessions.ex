@@ -122,6 +122,11 @@ defmodule ClaudiverseServer.Sessions do
 
   def get_session(id), do: Repo.get(Session, id)
 
+  @doc "Whether `user_id` has ever had a seat titled `title` (any row, running or not)."
+  def user_has_title?(user_id, title) when is_binary(title) do
+    Repo.exists?(from s in Session, where: s.user_id == ^user_id and s.title == ^title)
+  end
+
   # With last_activity_at, as the list computes it. Without it the serializer
   # fell back to inserted_at, so GET /api/sessions/:id said "8h ago" for a seat
   # the list showed active minutes ago (measured on 203737 by the app).

@@ -6,8 +6,9 @@ With `--validate`, `cv-runner` mints a check task after each successfully reaped
 
 A runner slot claims one task, spawns a worker, and reaps it when the worker calls `cv_task_done` (see [runner-claim-and-reap.md](runner-claim-and-reap.md)). After a successful reap the runner does two things, in this order:
 
-1. `promoteContinuations(task)` runs always, whether or not `--validate` is set.
-2. `enqueueValidation(task)` runs only with `--validate`.
+1. `readReapRecord(task)` reads what the finished task says about itself: a forum task's thread, or a task-table row's events. From it come the parked continuations and the worker's declared outcome (`cv-reap.mjs` `completionOutcome`: the OUTCOME of its last `**TASK COMPLETE**`). A task-table row has no thread, so it never has continuations.
+2. `promoteContinuations(task, replies)` runs always, whether or not `--validate` is set.
+3. `enqueueValidation(task, outcome)` runs only with `--validate`.
 
 If the task was SUPERSEDED while the worker held it, the runner escalates instead and does neither: no continuation is promoted and no validation is minted, because the work was replaced on purpose.
 
@@ -41,12 +42,14 @@ The validator is a non-author by construction: it is a new task that any claimin
 | 3 | The title starts with `VALIDATE #`, or contains `VALIDATE #` followed by at least one digit anywhere. Case-sensitive. | `its title marks it as a validation` |
 | 4 | The title contains `POST-LANDING GATE` (case-insensitive). | `it is a post-landing gate, itself the independent check` |
 | 5 | The body contains the marker `NO-AUTO-VALIDATE`. | `its body carries NO-AUTO-VALIDATE` |
+| 6 | The worker's outcome starts with `NO-OP` or `DUPLICATE` (any case, after markdown). `cv_task_done` asks a worker that ran none of the work to start its outcome that way. | `its outcome declares it a no-op ("<first 60 chars>")` |
 
 Notes:
 
 - The lane rule (2) applies only when `--validate-channel` is set explicitly. The runner's own `--channel` is never used for it, because that would exempt all of that runner's production work.
 - The title rule (3) needs the capitalised words and a number. `validate the arena regen after rebase`, `write the VALIDATE step into the brief` and `CLOSE SHORT tail of the parser (free text, not a validator)` are not exempt.
 - `NO-AUTO-VALIDATE` is an opt-out marker a seat puts in a task body when the task produces nothing a second seat could re-derive (a no-commit analysis row, a gate run).
+- The outcome rule (6) needs the words first: `NO-OP. This was a duplicate dispatch.` is exempt, `Fixed the no-op branch in the duplicate check` is not. An outcome that could not be read (the read failed, or the worker wrote no TASK COMPLETE) leaves the task validated, as before.
 - A validator whose title does not follow the `VALIDATE #<n>` convention should carry `validates_task_id`, which the server stores for this purpose.
 
 Examples (shaped like the cases in `agent/tools/test/validation.test.mjs`):
@@ -134,13 +137,20 @@ The validation tasks the deep slots run carry `validates_task_id`, so they are e
 
 ### Continuations
 
-A worker that must yield before its goal is finished parks its successor's brief as a reply on the task it is working, titled `CONTINUE #<goal>`. A reply is never claimable. After a successful (non-superseded) reap, `promoteContinuations`:
+A worker that must yield before its goal is finished parks its successor's brief as a reply on the task it is working, titled `CONTINUE #<goal>`, as its last post before `cv_task_done`. A reply is never claimable. After a successful (non-superseded) reap of a forum task, `promoteContinuations` takes the thread's replies whose title starts with `CONTINUE #`, and for each that still stands:
 
-1. Fetches the finished task threaded (`cv.forumGet(task.id, true)`) and takes the replies whose title starts with `CONTINUE #`.
-2. Re-posts each as a top-level forum post by the slot in the runner's own `--channel`, with the same title and body and `status: "incoming"` (`cv.forumPost`).
-3. Reads the channel's `incoming` posts (`limit` 50, compact) and checks the new id is visible.
+1. Re-posts it as a top-level forum post by the slot in the runner's own `--channel`, with the same title and body and `status: "incoming"` (`cv.forumPost`).
+2. Reads the channel's `incoming` posts (`limit` 50, compact) and checks the new id is visible.
+3. Archives the parked reply, so a second reap of the task cannot promote it again.
 
-Because promotion happens only after a successful reap, a task that fails is never reaped successfully and its successor is never promoted. This runs regardless of `--validate`. It always uses the forum API, even when `--task-source tasks` (see the caveat below).
+A continuation does not stand (`cv-reap.mjs` `staleContinuation`) when:
+
+- it is archived: withdrawn, or promoted already;
+- its author posted another reply on the task after it, other than its TASK COMPLETE or another `CONTINUE #`: the seat went on working after parking it, so the handover no longer says where the work stopped. Measured 2026-10-12: a seat parked `CONTINUE #31132` while blocked, went on when the hold was lifted, posted its result and completed; the reply was promoted six seconds later into a duplicate task.
+
+A TASK COMPLETE after the continuation does not make it stale: `cv_task_done` always posts one, after a real yield too.
+
+Because promotion happens only after a successful reap, a task that fails is never reaped successfully and its successor is never promoted. This runs regardless of `--validate`, and only for forum tasks: a task-table row's number is not a forum post id, so a `--task-source tasks` runner has no thread to read.
 
 ## Configuration
 
@@ -199,7 +209,9 @@ Task create payload (tasks source):
 | `⛔ could not enqueue validation for #<id>: <error>. This log line is the only record.` | Forum post or read failed. | Create the validation by hand. |
 | `promoted continuation #<n> (parked on #<id>)` | Success. | None. |
 | `⚠️ continuation #<n> promoted but NOT visible to a claim query — the chain is stalled.` | New post not in the first 50 `incoming` posts of `--channel`. | Check the channel; no runner will pick it up until it is visible. |
-| `⚠️ could not read #<id> threaded; any parked continuation is NOT promoted: <error>` | The threaded fetch failed. | Promote the `CONTINUE #` reply by hand as a top-level `incoming` post. |
+| `not promoting continuation #<n> parked on #<id>: <reason>.` | The continuation is archived, or its seat went on working after parking it. | None; if it should run after all, unarchive it, or post it as a top-level `incoming` post by hand. |
+| `⚠️ promoted #<n> as #<m> but could not archive it (<error>): a second reap of #<id> would promote it again.` | Archiving the parked reply failed. | Archive it by hand. |
+| `⚠️ could not read #<id>'s thread (<error>): no continuation is promoted, and its outcome is unknown.` (or `events`, on a tasks source) | The read failed. | Promote any `CONTINUE #` reply by hand; the validation is minted as usual. |
 | `⛔ failed to promote a continuation parked on #<id>: <error>. This log line is the only record.` | Posting or verifying failed. | Promote by hand. |
 | `cv-runner: cannot read validate body <path>: <error>` (exit 2) | `--validate-body` file unreadable. | Fix the path. |
 | `cv-runner: validate body <path> is empty — refusing to enqueue validations with no brief.` (exit 2) | File empty after trimming. | Put a brief in the file. |
@@ -210,9 +222,8 @@ Other symptoms:
 
 - Cheap slots validate their own lane's work: `--validate-channel` was not set, so validations land in the producing slot's own lane, where the same tier claims them. Set it to the validator lane.
 - A validator's own work gets a new validation: the validator task lacks `validates_task_id` and its title lacks `VALIDATE #<n>`, and the runner has no `--validate-channel` matching its lane. Fix the title, or start the validator slot with `--validate-channel` set to its own lane.
-- Continuation never runs on a tasks-source fleet: see the caveat below.
-
-Caveat: `promoteContinuations` always uses the forum (`forumGet`/`forumPost`) with the finished task's id. A `--task-source tasks` runner claims from the task table, never from forum posts, and its task id is a task-table id rather than a forum post id. In that configuration a parked continuation cannot be fetched by that id and, if posted, would land in a queue that the runner does not claim from.
+- Continuation never runs on a tasks-source fleet: a task-table row has no thread. (Before 2026-10-12 the runner read the forum post with the task's number, an unrelated thread.)
+- A finished task that did nothing got a validator: its outcome did not start with `NO-OP` or `DUPLICATE`, or the runner could not read it.
 
 ## Related pages
 
@@ -227,6 +238,7 @@ Caveat: `promoteContinuations` always uses the forum (`forumGet`/`forumPost`) wi
 ## Source
 
 - `agent/tools/cv-validation.mjs`
+- `agent/tools/cv-reap.mjs` (`completionOutcome`, `staleContinuation`)
 - `agent/tools/test/validation.test.mjs`
 - `agent/tools/cv-runner.mjs` (`enqueueValidation`, `promoteContinuations`, flag parsing, `isValidationTask` use in `runTask`)
 - `agent/tools/cv-core.mjs` (`taskCreate`, `taskList`, `forumPost`, `forumRead`, `forumGet`)

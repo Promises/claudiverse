@@ -54,6 +54,8 @@ Sign-in takes a `scope` of `api` (the server default), `app` or `super`. The pan
 
 ### The `client` field
 
+A panel signed in before it asked for `app` (2026-10-07) still holds an `api` token. The panel reads its scope from `GET /api/me` (`AuthContext`'s `scope`), and a page whose actions are app-only says so instead of failing with the server's refusal: "This page needs a fresh sign-in: sign out and sign in again.", with a "Sign out" button (`FreshSignIn`). The same notice replaces any server error that says "app-only". It is shown on the GitHub page (in place of its list and form) and on Start a seat (with the button disabled); the Accounts page shows it only if the server refuses one of its actions as app-only (none it calls today checks).
+
 The panel sends `client: "web"`. The server stores it as the token's label, shown in the token list. If `client` is omitted the label defaults to the scope. A label must match `[A-Za-z0-9 ._-]{1,64}`. The label also matters for logout: an `app` or `super` token is revoked by logout only if a sign-in created it, meaning it has a label.
 
 ### Token lifetime and logout

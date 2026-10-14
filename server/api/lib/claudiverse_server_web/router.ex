@@ -67,7 +67,16 @@ defmodule ClaudiverseServerWeb.Router do
     post "/hosts/:host/roots", HostController, :add_root
     delete "/hosts/:host/roots", HostController, :remove_root
     post "/runners/heartbeat", RunnerController, :heartbeat
+    get "/models", ModelController, :index
+    get "/github/tokens", GitHubController, :index
+    post "/github/tokens", GitHubController, :create
+    post "/github/tokens/:id/check", GitHubController, :check
+    patch "/github/tokens/:id", GitHubController, :update
+    delete "/github/tokens/:id", GitHubController, :delete
+    get "/github/subscriptions", GitHubController, :subscriptions
+    get "/github/repos", GitHubController, :repos
     get "/fleets", RunnerController, :fleets
+    patch "/fleets/:fleet", RunnerController, :update_fleet
     get "/profiles", ProfileController, :index
     post "/profiles", ProfileController, :create
     get "/profiles/:id", ProfileController, :show
@@ -84,6 +93,9 @@ defmodule ClaudiverseServerWeb.Router do
     post "/sessions/:id/mirror", SessionController, :mirror
     post "/sessions/:id/stop", HostController, :stop
     post "/sessions/:id/resume", HostController, :resume
+    post "/sessions/:id/restart", RestartController, :restart_one
+    post "/hosts/restart_idle", RestartController, :restart_idle
+    post "/hosts/:host/restart_idle", RestartController, :restart_idle
     get "/app/builds/latest", AppBuildController, :latest
     get "/app/builds/:id/apk", AppBuildController, :apk
     get "/human_requests", HumanRequestController, :index
@@ -96,6 +108,7 @@ defmodule ClaudiverseServerWeb.Router do
     get "/notify/status", NotifyController, :status
     post "/notify/send", NotifyController, :send
     post "/notify/report", NotifyController, :report
+    post "/notify/direct", NotifyController, :direct
 
     # Discussion forum (pull to read/search; opt-in subscribe routes new-post
     # pings through Notifications.Router). See ForumController.
@@ -115,6 +128,7 @@ defmodule ClaudiverseServerWeb.Router do
 
     # Panel-facing: enrol, inspect, poll usage, remove.
     get "/anthropic_auths", AnthropicAuthController, :index
+    get "/anthropic_auths/usage_history", AnthropicAuthController, :usage_history
     post "/anthropic_auths/authorize", AnthropicAuthController, :authorize
     post "/anthropic_auths/complete", AnthropicAuthController, :complete
     post "/anthropic_auths/:id/reauthorize/complete", AnthropicAuthController, :reauthorize

@@ -25,6 +25,7 @@
 // keeps waiting. The human keeps the override.
 //
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, accessSync, existsSync, mkdtempSync, writeFileSync, rmSync, constants as fsConstants } from "node:fs";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -32,6 +33,9 @@ import { dirname, join } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import * as cv from "./cv-core.mjs";
 import { VALIDATION_PREFIX, NO_AUTO_VALIDATE, isValidationTask, validationExemption } from "./cv-validation.mjs";
+import { CONTINUE_PREFIX, completionOutcome, staleContinuation, commitCheck, preserveRef, refsAt, transcriptFiles } from "./cv-reap.mjs";
+import { escalateOnTask } from "./cv-escalate.mjs";
+import { watchStartup } from "./cv-startup.mjs";
 
 const execFileP = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -95,6 +99,11 @@ const STUCK_MIN = Number(arg("stuck-after", "30"));
 // Backstop for when CPU cannot be measured at all — deliberately long, because
 // its only job is to stop an unreadable process table from silencing the alarm.
 const STUCK_HARD_MIN = Number(arg("stuck-hard-after", "180"));
+// For this long after a spawn the worker's pane is looked at, every 10 s, for
+// a dialog of Claude Code's own that would stop it before its first turn
+// (cv-startup.mjs). 0 turns it off.
+const STARTUP_WATCH_MS = Number(arg("startup-watch", "300")) * 1000;
+const PANE_LOOK_MS = 10_000;
 // CPU seconds across the tree that count as "this worker did something".
 const CPU_EPS_S = Number(arg("cpu-epsilon", "0.5"));
 const ONCE = has("once");
@@ -102,6 +111,19 @@ const ATTACH_RW = has("attach-rw");
 const ATTACH = has("attach") || ATTACH_RW;
 const VALIDATE = has("validate");
 const CHARTER_PATH = arg("charter");
+// Whether this lane's workers may commit. "forbidden": a commit a worker made
+// (its transcript shows it) is escalated as a CHARTER VIOLATION at the reap.
+// "local": workers commit and never push (wc3-fix: a human pushes after
+// validation), so the worker's own unpushed commits are logged and kept on a
+// rescue ref, not escalated. Commits it did not make are only logged either
+// way, and commits nobody can attribute still escalate (commitCheck).
+const COMMITS = arg("commits", "allowed");
+if (!["allowed", "forbidden", "local"].includes(COMMITS)) {
+  console.error(`--commits must be "allowed", "forbidden" or "local", got ${JSON.stringify(COMMITS)}`);
+  process.exit(2);
+}
+// Where the workers' transcripts are: the config folder cv-spawn gives them.
+const CLAUDE_HOME = process.env.CV_SPAWN_CONFIG_DIR || process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 const FLEET = arg("fleet");
 
 // --task-source=tasks scopes every claim by fleet. Without --fleet the claim
@@ -435,46 +457,9 @@ const cpuSecondsOfTree = async (rootPid) => {
 // 976 KB plate corpus. Both survived only because a human happened to
 // rescue-fetch the branch before the reap. That is not a gate, that is luck.
 //
-// UNFINISHED IS SAFE; UNSAVED IS NOT.
-const git = async (dir, ...args) => {
-  try {
-    const { stdout } = await execFileP("git", ["-C", dir, ...args]);
-    return { ok: true, out: String(stdout).trim() };
-  } catch (e) {
-    return { ok: false, out: String(e.stderr || e.message || e).trim() };
-  }
-};
-
-// durable:true  — HEAD is on a remote, or is already an ancestor of origin/master
-// durable:false — HEAD exists only here
-// durable:null  — could not determine. NOT the same as false, and never treated
-//                 as "safe": the caller preserves anyway rather than guessing.
-const commitsDurable = async (dir) => {
-  const head = await git(dir, "rev-parse", "HEAD");
-  if (!head.ok) return { durable: null, why: `rev-parse HEAD failed: ${head.out}` };
-  const sha = head.out;
-  await git(dir, "fetch", "origin", "--quiet"); // stale remotes would fail CLOSED, which is the safe direction
-  const onRemote = await git(dir, "branch", "-r", "--contains", sha);
-  if (!onRemote.ok) return { durable: null, sha, why: `branch -r --contains failed: ${onRemote.out}` };
-  if (onRemote.out) return { durable: true, sha, why: `on ${String(onRemote.out).split("\n")[0].trim()}` };
-  // No separate "is it an ancestor of the mainline?" test: `branch -r --contains`
-  // already lists EVERY remote branch containing the sha, so a merged commit is
-  // reported by origin/master itself. An extra merge-base check would add nothing
-  // except a hardcoded branch name that is wrong in any repo whose default is not
-  // `master` — this file also runs against repos whose default is `main`.
-  return { durable: false, sha, why: "on no remote branch" };
-};
-
-// A git WORKTREE shares its parent's object store, so a commit made here is
-// already in that store — what disappears is the REF, when the slot is reused
-// and the branch is reset or deleted. So preservation costs one local ref
-// write: no network, no push, no authorship decision taken on a dead seat's
-// behalf. Publishing is a human's call; NOT LOSING IT is not.
-const preserveRef = async (dir, worker, sha) => {
-  const name = `refs/rescue/${worker}`;
-  const r = await git(dir, "update-ref", name, sha);
-  return r.ok ? name : null;
-};
+// UNFINISHED IS SAFE; UNSAVED IS NOT. The check (commitCheck: only commits
+// the worker made since its spawn count) and the rescue ref (preserveRef) are
+// in cv-reap.mjs; checkCommits below acts on them.
 
 // --- claim -----------------------------------------------------------------
 // Optimistic concurrency: two runners can both write an owner; only one wins
@@ -553,14 +538,36 @@ const haltBindsMe = (title) => cv.haltBindsFleet(title, FLEET);
 // one that nothing will ever reap.
 const HANDOFF_GRACE_S = Number(arg("handoff-grace", "60"));
 const DECLINE_POLL_MS = Math.max(POLL_MS, Number(arg("decline-poll", "30000")));
+
+// A halt check that fails keeps failing closed, and is tried again with a
+// backoff (POLL_MS doubling, at most every 5 min), each failure logged, until
+// the server answers; then "server reachable again" and claims resume. A run
+// of failures must be visible: an idle runner is otherwise silent, and a pane
+// whose last line is a failure cannot tell "still down" from "fine since".
+const HALT_BACKOFF_MAX_MS = 5 * 60_000;
+let haltFailures = 0;
+let haltFailingSince = null;
+let haltRetryAt = 0;
+
 async function halted() {
+  if (haltFailures && Date.now() < haltRetryAt) return true;
   let posts;
   try {
     posts = (await cv.forumRead(HALT_CHANNEL, { limit: HALT_WINDOW, compact: true }))?.posts ?? [];
   } catch (e) {
-    log(`⛔ HALT CHECK FAILED (${String(e.message || e)}) — refusing to claim. Failing CLOSED on purpose.`);
-    log(`   server: ${cv.CV_BASE_URL}${cv.CV_URL_IS_DEFAULT ? "  ⚠️ DEFAULT — CLAUDIVERSE_URL is not set in this shell. --mcp configures the WORKER, not this runner." : ""}`);
+    haltFailures += 1;
+    haltFailingSince ??= new Date();
+    const wait = Math.min(POLL_MS * 2 ** (haltFailures - 1), HALT_BACKOFF_MAX_MS);
+    haltRetryAt = Date.now() + wait;
+    log(`⛔ HALT CHECK FAILED (${String(e.message || e)}) — refusing to claim. Failing CLOSED on purpose. Failure ${haltFailures} since ${haltFailingSince.toTimeString().slice(0, 8)}; next check in ${Math.round(wait / 1000)} s.`);
+    if (haltFailures === 1)
+      log(`   server: ${cv.CV_BASE_URL}${cv.CV_URL_IS_DEFAULT ? "  ⚠️ DEFAULT — CLAUDIVERSE_URL is not set in this shell. --mcp configures the WORKER, not this runner." : ""}`);
     return true;
+  }
+  if (haltFailures) {
+    log(`server reachable again after ${haltFailures} failed halt check(s) since ${haltFailingSince.toTimeString().slice(0, 8)} — claims resume.`);
+    haltFailures = 0;
+    haltFailingSince = null;
   }
   const halt = posts.find(
     (p) => (p.title || "").startsWith("HALT") && !p.archived && haltBindsMe(p.title || ""),
@@ -639,7 +646,7 @@ async function claimFromTasks() {
     log(`claimed #${t.id} but could not mark RUNNING: ${String(e.message || e)}`);
   }
 
-  return { id: t.id, worker, title: t.title || `task ${t.id}`, body: t.body_md || "", validatesTaskId: t.validates_task_id ?? null, lane: t.lane ?? null };
+  return { id: t.id, worker, title: t.title || `task ${t.id}`, body: t.body_md || "", validatesTaskId: t.validates_task_id ?? null, lane: t.lane ?? null, createdBy: t.created_by ?? null };
 }
 
 // A DRAIN: `touch ~/.claudiverse/drain/<slot>` on the slot's host and the
@@ -704,7 +711,9 @@ async function claim() {
         log(
           claim.notFound
             ? `#${p.id} vanished before it could be claimed — skipping`
-            : `#${p.id} already held by ${claim.heldBy ?? "another slot"} — skipping`
+            : claim.notClaimable
+              ? `#${p.id} is ${claim.notClaimable} now (it changed after the list was read) — not claiming it`
+              : `#${p.id} already held by ${claim.heldBy ?? "another slot"} — skipping`
         );
         continue;
       }
@@ -797,10 +806,17 @@ async function runTask(task) {
   // may not request a human) and groups it under its fleet.
   args.splice(1, 0, "--origin", "runner");
   if (FLEET) args.splice(1, 0, "--fleet", FLEET);
+  // The worker's Claude Code session id, chosen here: the reap reads its
+  // transcript to tell the commits it made from anyone else's (commitCheck).
+  task.sessionId = randomUUID();
+  args.splice(1, 0, "--claude-arg", "--session-id", "--claude-arg", task.sessionId);
   try {
     // 90s, not 30s: cv-spawn now WAITS for the shell prompt and then verifies
     // the process actually started before returning. 30s could kill it during
     // its own verification, turning a good spawn into a reported failure.
+    // What the workdir's refs held before the worker: at the reap, only commits
+    // made since can be its own (commitCheck).
+    task.refsAtSpawn = await refsAt(WORKDIR);
     await execFileP(join(HERE, "cv-spawn.sh"), args, { timeout: 90000 });
   } catch (e) {
     const n = (spawnFailures.get(task.id) ?? 0) + 1;
@@ -818,6 +834,9 @@ async function runTask(task) {
 
   const started = Date.now();
   let escalated = false;
+  // Startup-dialog state (watchStartup): what the pane showed, and when it was last looked at.
+  let startupSeen = null;
+  let lastPaneLook = 0;
   // Handoff-gate state. `done` can be observed before the handoff is readable —
   // the two writes are not atomic — so we need to remember when we first saw it
   // to tell a momentary race from a genuine stall, and to warn/escalate ONCE
@@ -929,22 +948,8 @@ async function runTask(task) {
       // outage, not a safeguard. Writing a local rescue ref costs nothing, is
       // instant, needs no network, and takes no authorship decision on a dead
       // seat's behalf. The escalation is how a human learns to publish it.
-      const dur = await commitsDurable(WORKDIR);
-      if (dur.durable !== true) {
-        const kept = dur.sha ? await preserveRef(WORKDIR, task.worker, dur.sha) : null;
-        const state = dur.durable === false ? "NOT PUSHED" : "UNVERIFIABLE";
-        log(
-          `⚠️ #${task.id}: ${task.worker}'s commits are ${state} (${dur.why})` +
-            (kept ? ` — preserved at ${kept} before reaping.` : ` — AND THE RESCUE REF COULD NOT BE WRITTEN.`)
-        );
-        await escalate(
-          task,
-          `reaped, but its commits were ${state}: ${dur.why}. ` +
-            (kept
-              ? `They are preserved in the worktree's object store at ${kept} (HEAD ${String(dur.sha).slice(0, 8)}) — nothing is lost, but NOBODY HAS PUBLISHED IT. Push that ref, or the work lives on one machine.`
-              : `⛔ AND THE RESCUE REF COULD NOT BE WRITTEN — treat HEAD ${String(dur.sha || "?").slice(0, 8)} in ${WORKDIR} as at risk and recover it by hand NOW.`)
-        );
-      }
+      const commits = await checkCommits(task);
+      if (commits) await escalate(task, `reaped, but ${commits}`);
       await tmux("kill-session", "-t", task.worker);
       // Killing the session drops any attached client, handing this terminal
       // back. Give that a beat to land before writing, so the completion line
@@ -961,8 +966,9 @@ async function runTask(task) {
         );
         return;
       }
-      await promoteContinuations(task);
-      if (VALIDATE) await enqueueValidation(task);
+      const record = await readReapRecord(task);
+      await promoteContinuations(task, record.replies);
+      if (VALIDATE) await enqueueValidation(task, record.outcome);
       return;
     }
 
@@ -989,8 +995,7 @@ async function runTask(task) {
           continue;
         }
         blocked.add(task.id);
-        const dur = await commitsDurable(WORKDIR);
-        const kept = dur.durable !== true && dur.sha ? await preserveRef(WORKDIR, task.worker, dur.sha) : null;
+        const commits = await checkCommits(task);
         await tmux("kill-session", "-t", task.worker);
         if (logBuffer) await sleep(300);
         flushLog();
@@ -999,7 +1004,7 @@ async function runTask(task) {
           task,
           `${task.worker} DECLINED this task: "${why}". Released to READY; ${SLOT} will not claim it again, ` +
             `but another slot in ${CHANNEL} can. ⚠️ If every slot in that lane declines, nobody will take it — re-route it.` +
-            (kept ? ` The worker also left unpushed commits, preserved at ${kept}.` : "")
+            (commits ? ` Also: ${commits}` : "")
         );
         current = null;
         return;
@@ -1018,6 +1023,28 @@ async function runTask(task) {
       await escalate(task, `worker process disappeared without calling cv_task_done — task left ACTIVE for a human to judge`);
       current = null;
       return;
+    }
+
+    // A dialog before the first turn ("trust this folder?", first-run setup, a
+    // login): nothing will answer it, so it is escalated in under a minute
+    // rather than after the CPU rule's 30. MEASURED 2026-10-13: two workers
+    // sat 35 min at the trust dialog.
+    if (Date.now() - started < STARTUP_WATCH_MS && Date.now() - lastPaneLook >= PANE_LOOK_MS) {
+      lastPaneLook = Date.now();
+      const cap = await tmux("capture-pane", "-p", "-t", task.worker);
+      if (cap.ok) {
+        const w = watchStartup(startupSeen, cap.out, Date.now(), started);
+        startupSeen = w.seen;
+        if (w.escalate) {
+          const { kind, afterS, excerpt } = w.escalate;
+          log(`⚠️ ${task.worker} is waiting at Claude Code's ${kind} dialog, ${afterS} s after the spawn — escalating.`);
+          await escalate(
+            task,
+            `the worker is waiting at Claude Code's ${kind} dialog, ${afterS} s after the spawn, and nothing will answer it. NOT killed: ` +
+              `answer it (tmux attach -t ${task.worker}), or trust the folder (cv-trust.mjs) and restart the task. The pane shows:\n\n${excerpt}`
+          );
+        }
+      }
     }
 
     // Sample WORK, not silence. See cpuSecondsOfTree above for why elapsed time
@@ -1066,6 +1093,41 @@ async function runTask(task) {
 // replies. That was never verified and is false: the API rejects a blank channel
 // outright. Every escalation went to the terminal and nowhere else. Same bug as
 // cv_fact_relate had, in the same file, hidden by a confident comment.
+// Before a reap: are commits the worker made at risk, or against the lane's
+// --commits rule? Logs what it finds, writes a rescue ref for what is at risk,
+// and returns the escalation text, or null when there is nothing to escalate.
+// Commits someone else made in a shared checkout are logged, never escalated.
+async function checkCommits(task) {
+  const transcript = task.sessionId ? transcriptFiles(CLAUDE_HOME, task.sessionId) : null;
+  const c = await commitCheck(WORKDIR, task.refsAtSpawn, transcript, COMMITS);
+  if (c.foreign.length)
+    log(`#${task.id}: HEAD moved during the task, but not by ${task.worker} (a shared checkout); not escalated: ${c.foreign.map((f) => `${f.sha.slice(0, 8)} ${f.subject}`).join("; ")}`);
+  if (c.kind === "quiet") {
+    log(`#${task.id}: ${c.why}`);
+    return null;
+  }
+  const kept = c.sha ? await preserveRef(WORKDIR, task.worker, c.sha) : null;
+  const where = kept
+    ? `preserved at ${kept} (${String(c.sha).slice(0, 8)})`
+    : `⛔ AND THE RESCUE REF COULD NOT BE WRITTEN — treat ${String(c.sha || "HEAD").slice(0, 8)} in ${WORKDIR} as at risk and recover it by hand NOW`;
+  if (c.kind === "local" && kept) {
+    log(`#${task.id}: ${c.why} — ${where}; not escalated (--commits local).`);
+    return null;
+  }
+  if (c.kind === "violation") {
+    log(`⛔ #${task.id}: CHARTER VIOLATION — ${task.worker} ${c.why} — ${where}.`);
+    return `CHARTER VIOLATION: ${task.worker} ${c.why}. This lane runs --commits forbidden. Nothing was pushed by the runner; the commits are ${where}. Decide whether to keep or drop them.`;
+  }
+  const state = c.kind === "unverifiable" ? "UNVERIFIABLE" : "NOT PUSHED";
+  log(`⚠️ #${task.id}: ${task.worker}'s commits are ${state} (${c.why}) — ${where}.`);
+  return (
+    `its commits were ${state}: ${c.why}. ` +
+    (kept
+      ? `They are ${where} — nothing is lost, but NOBODY HAS PUBLISHED IT. Decide whether it belongs on a remote (check where that remote points first: it may be public); until then the work lives on one machine.`
+      : `${where}.`)
+  );
+}
+
 async function escalate(task, why) {
   const body = `**RUNNER ${SLOT}** — ${why}`;
   if (TASK_SOURCE === "tasks") return escalateTask(task, body);
@@ -1108,40 +1170,7 @@ async function escalate(task, why) {
 // cv_task_show renders), and posts a top-level alert in the lane's channel
 // naming the task, verified by the id the post came back with.
 async function escalateTask(task, body) {
-  const ev = await cv.taskProgress(task.id, { worker: SLOT, detail: body }).catch((e) => ({ _failed: true, error: String(e.message || e) }));
-  if (ev?._failed) log(`⛔ escalation NOT recorded on task #${task.id} (${ev._status ?? ""} ${ev.error ?? ""}).`);
-  if (ESCALATE_VIA === "notify") {
-    let pinged = false;
-    try {
-      const firstLine = body.split("\n")[0];
-      await cv.report(
-        `tasks:${CHANNEL}`,
-        `RUNNER ${SLOT} needs a human — task #${task.id}: ${firstLine.length > 240 ? firstLine.slice(0, 239) + "…" : firstLine} — cv_task_show ${task.id}`
-      );
-      pinged = true;
-    } catch (e) {
-      log(`⛔ escalation ping to tasks:${CHANNEL} FAILED: ${String(e.message || e)}.`);
-    }
-    const where = [ev?._failed ? null : `task #${task.id}`, pinged ? `ping tasks:${CHANNEL}` : null].filter(Boolean);
-    log(where.length ? `escalation recorded on ${where.join(" and ")}` : `⛔ escalation recorded NOWHERE — this log line is the only record.`);
-    return;
-  }
-  let postId = null;
-  try {
-    const r = await cv.forumPost(
-      SLOT,
-      CHANNEL,
-      `${body}\n\nTask #${task.id} in ${FLEET}/${CHANNEL} — read it with \`cv_task_show ${task.id}\`, not the forum post of that number.`,
-      undefined,
-      { title: `RUNNER: needs a human — task #${task.id}` }
-    );
-    postId = r?.post?.id ?? null;
-    if (postId !== null && (await cv.forumGet(postId, false))?.post?.id !== postId) postId = null;
-  } catch (e) {
-    log(`⛔ escalation alert NOT POSTED to #${CHANNEL}: ${String(e.message || e)}.`);
-  }
-  const where = [ev?._failed ? null : `task #${task.id}`, postId !== null ? `forum post ${postId}` : null].filter(Boolean);
-  log(where.length ? `escalation recorded on ${where.join(" and ")}` : `⛔ escalation recorded NOWHERE — this log line is the only record.`);
+  await escalateOnTask({ cv, slot: SLOT, fleet: FLEET, channel: CHANNEL, via: ESCALATE_VIA, log }, task, body);
 }
 
 // The first non-blank line of the worker's handoff, if it is a decline.
@@ -1200,19 +1229,43 @@ async function releaseDeclined(task, why) {
 // that knows where it stopped, its context is already loaded, and the brief then
 // has its own task id — which is a correction surface. A prediction carried in an
 // overwritable per-seat handoff had nowhere to be corrected; this does.
-const CONTINUE_PREFIX = "CONTINUE #";
+//
+// A parked continuation is promoted once, and only while it stands
+// (cv-reap.mjs staleContinuation): not when its seat went on working after
+// parking it, and not when it is archived. What is promoted is archived, so a
+// second reap cannot promote it again.
 
-async function promoteContinuations(task) {
-  let replies;
+// What a finished task says about itself: a forum task's thread (its
+// continuations and the worker's TASK COMPLETE reply), or a task-table row's
+// events (the TASK COMPLETE report is a PROGRESS event; such a task has no
+// thread). ⛔ Never the forum post with a task-table row's NUMBER: the two are
+// separate sequences, and a task-source runner used to read an unrelated
+// thread here at every reap. A read that fails promotes nothing, and leaves
+// the outcome unknown, so the validation is minted as before.
+async function readReapRecord(task) {
   try {
-    replies = (await cv.forumGet(task.id, true))?.replies ?? [];
+    if (TASK_SOURCE === "tasks") {
+      const r = await cv.taskShow(task.id);
+      if (r?._failed) throw new Error(`${r._status} ${r.error ?? ""}`);
+      const entries = (r?.events ?? []).filter((e) => e.kind === "PROGRESS").map((e) => ({ author: e.actor, body: e.detail }));
+      return { replies: [], outcome: completionOutcome(entries, task.worker) };
+    }
+    const replies = (await cv.forumGet(task.id, true))?.replies ?? [];
+    return { replies, outcome: completionOutcome(replies, task.worker) };
   } catch (e) {
-    log(`⚠️ could not read #${task.id} threaded; any parked continuation is NOT promoted: ${String(e.message || e)}`);
-    return;
+    log(`⚠️ could not read #${task.id}'s ${TASK_SOURCE === "tasks" ? "events" : "thread"} (${String(e.message || e)}): no continuation is promoted, and its outcome is unknown.`);
+    return { replies: [], outcome: null };
   }
+}
+
+async function promoteContinuations(task, replies) {
   const parked = replies.filter((r) => (r.title || "").startsWith(CONTINUE_PREFIX));
-  if (!parked.length) return;
   for (const p of parked) {
+    const stale = staleContinuation(p, replies);
+    if (stale) {
+      log(`not promoting continuation #${p.id} parked on #${task.id}: ${stale}.`);
+      continue;
+    }
     try {
       const r = await cv.forumPost(SLOT, CHANNEL, p.body || "", undefined, {
         title: p.title,
@@ -1228,6 +1281,11 @@ async function promoteContinuations(task) {
           ? `promoted continuation #${id} (parked on #${task.id})`
           : `⚠️ continuation #${id} promoted but NOT visible to a claim query — the chain is stalled.`
       );
+      try {
+        await cv.forumArchive(p.id);
+      } catch (e) {
+        log(`⚠️ promoted #${p.id} as #${id} but could not archive it (${String(e.message || e)}): a second reap of #${task.id} would promote it again.`);
+      }
     } catch (e) {
       log(`⛔ failed to promote a continuation parked on #${task.id}: ${String(e.message || e)}. This log line is the only record.`);
     }
@@ -1254,8 +1312,8 @@ async function promoteContinuations(task) {
 // VALIDATION_PREFIX, NO_AUTO_VALIDATE, isValidationTask and validationExemption
 // live in cv-validation.mjs (tested in test/validation.test.mjs).
 
-async function enqueueValidation(task) {
-  const exempt = validationExemption(task, { validateLane: VALIDATE_CHANNEL });
+async function enqueueValidation(task, outcome) {
+  const exempt = validationExemption(task, { validateLane: VALIDATE_CHANNEL, outcome });
   if (exempt) {
     // Logged, never silent: a skipped validation must be distinguishable from a
     // failed enqueue.
@@ -1486,12 +1544,33 @@ else log(`stdin is not a TTY — the 'a' attach key is unavailable in this termi
 // --once exits after one attempt whether or not it succeeded. Three strikes and
 // the task is left for a human instead of being hammered.
 const SPAWN_STRIKES = 3;
+
+// An idle runner says it is alive every 30 minutes: how many polls since the
+// last line, and what they found. Without it, an idle slot on an empty lane
+// writes nothing for hours, and its pane looks exactly like a wedged one
+// (MEASURED 2026-10-12: four lorem-fleet runners were read as wedged for 12 h after a
+// network drop; the server showed nothing unclaimed, so they were most likely
+// healthy and silent).
+const LIVENESS_MS = 30 * 60_000;
+let idlePolls = 0;
+let idleSince = Date.now();
+function idleLiveness() {
+  idlePolls += 1;
+  if (Date.now() - idleSince < LIVENESS_MS) return;
+  const found = haltFailures ? `the server unreachable (${haltFailures} failed halt checks)` : haltAnnounced ? "the fleet halted" : "nothing to claim";
+  log(`idle: ${idlePolls} polls since ${new Date(idleSince).toTimeString().slice(0, 8)}, last one found ${found}.`);
+  idlePolls = 0;
+  idleSince = Date.now();
+}
+
 for (;;) {
   await drainIfAsked();
   const task = await claim();
   if (task) {
     const before = spawnFailures.get(task.id) ?? 0;
     await runTask(task);
+    idlePolls = 0;
+    idleSince = Date.now();
     const after = spawnFailures.get(task.id) ?? 0;
     if (after > before) {
       if (after >= SPAWN_STRIKES) {
@@ -1509,6 +1588,7 @@ for (;;) {
       break;
     }
   } else {
+    idleLiveness();
     await sleep(POLL_MS);
   }
 }

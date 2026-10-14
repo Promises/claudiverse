@@ -36,8 +36,18 @@ defmodule ClaudiverseServer.DataCase do
   Sets up the sandbox based on the test tags.
   """
   def setup_sandbox(tags) do
+    # Not for async tests: they run first, together, sharing these processes.
+    isolate = not tags[:async]
+    if isolate, do: ClaudiverseServer.TestIsolation.stop_leftovers()
+
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(ClaudiverseServer.Repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+
+    if isolate do
+      ClaudiverseServer.TestIsolation.reset_state()
+      # on_exit callbacks run last-registered first: this one before the sandbox goes.
+      on_exit(fn -> ClaudiverseServer.TestIsolation.stop_leftovers() end)
+    end
   end
 
   @doc """

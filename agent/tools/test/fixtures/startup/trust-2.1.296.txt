@@ -1,0 +1,49 @@
+printf "CV""READY\n"
+printf "CV""READY\n"
+printf "CV""READY\n"
+➜  lorem-repo printf "CV""READY\n"
+printf "CV""READY\n"
+printf "CV""READY\n"
+CVREADY
+➜  lorem-repo printf "CV""READY\n"
+printf "CV""READY\n"
+CVREADY
+➜  lorem-repo printf "CV""READY\n"
+CVREADY
+➜  lorem-repo cd /Users/me/Documents/projects/lorem/lorem-repo && CLAUDIVERSE_TITLE=lorem-w1-t2166 CLAUDIVERSE_ORIGIN=runner CLAUDIVERSE_FLEET=lorem ANTHROPIC_BASE_URL=http://claudiverse.example:4010/proxy/s
+eat/lorem-w1-t2166 ANTHROPIC_CUSTOM_HEADERS=$'X-Claudiverse-Token: FAKEseatTOKEN0000000000000000000000000000000=\nX-Claudiverse-Pool: 1\nX-Claudiverse-Observe: off' CLAUDE_CODE_OAUTH_TOKEN="$(cat /Users/me/.conf
+ig/claudiverse/oauth-token)" CLAUDIVERSE_SKIP_TRUST=1 CLAUDIVERSE_URL=http://claudiverse.example:4010 CLAUDIVERSE_TOKEN=FAKEseatTOKEN0000000000000000000000000000000= /Users/me/Documents/projects/claudiverse/patch
+-ref/versionref/2.1.296-bin --mcp-config /Users/me/.config/claudiverse/lorem/lorem-worker.mcp.json --add-dir /tmp//cv-prompts --permission-mode auto --name lorem-w1-t2166
+ --model claude-haiku-5-5 Your\ instructions\ are\ in\ @/tmp//cv-prompts/cv-prompt-IBbjkc\ -\ read\ all\ of\ it\ and\ follow\ it.; rm -f /tmp//cv-prompts/cv-prompt-IBbjkc
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Accessing workspace:
+
+ /Users/me/Documents/projects/lorem/lorem-repo
+
+ Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.
+
+ Claude Code'll be able to read, edit, and execute files here.
+
+ Security guide
+
+ ❯ No, exit
+   Yes, I trust this folder
+
+ Enter to confirm · Esc to cancel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

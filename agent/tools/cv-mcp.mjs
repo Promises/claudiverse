@@ -194,7 +194,7 @@ server.registerTool(
   "cv_subscribe",
   {
     description:
-      "Subscribe THIS orchestrator to watch the given session titles. When a watched session finishes a turn (turn_complete) or poses an AskUserQuestion, you are pinged — a turn is injected into you once you're idle. React to those pings; DO NOT poll. Include the reserved title \"@pool\" to be pinged when the Anthropic account pool switches account (a failover, or a fleet-wide switch), and when an account needs re-auth or is re-authorized; \"@pool:reset\" when an account's weekly limit resets, \"@pool:capped\" when one reaches 100% weekly (add \":session\" to either for the 5-hour limit instead), \"@pool:step:10\" or \"@pool:step:5\" when an account's weekly usage crosses each multiple of 10 or 5, or \"@pool:*\" for all the weekly ones, the switches and the re-auth events. mode \"add\" or \"remove\" changes your list by these titles; \"replace\" (the default) sets it to exactly these. The result names the previous list and anything dropped.",
+      "Subscribe THIS orchestrator to watch the given session titles. When a watched session finishes a turn (turn_complete) or poses an AskUserQuestion, you are pinged — a turn is injected into you once you're idle. React to those pings; DO NOT poll. Include the reserved title \"@pool\" to be pinged when the Anthropic account pool switches account (a failover, or a fleet-wide switch), and when an account needs re-auth or is re-authorized; \"@pool:reset\" when an account's weekly limit resets, \"@pool:capped\" when one reaches 100% weekly (add \":session\" to either for the 5-hour limit instead), \"@pool:step:10\" or \"@pool:step:5\" when an account's weekly usage crosses each multiple of 10 or 5, or \"@pool:*\" for all the weekly ones, the switches and the re-auth events. GitHub (read with the operator's tokens; pings carry metadata only, never comment text: read details yourself with gh): \"gh:owner/repo\" for its pull requests and issues (opened, closed, merged, commented, reviewed, checks passed/failed), \"gh:owner/repo:prs\" or \":issues\" for one kind, \"gh:owner/repo#123\" for one thread, \"gh:@me\" for what newly awaits you (a review requested, assigned, mentioned), \"@github\" for a token refused or about to expire. mode \"add\" or \"remove\" changes your list by these titles; \"replace\" (the default) sets it to exactly these. The result names the previous list and anything dropped.",
     inputSchema: {
       watch: z.array(z.string()).describe("session titles to watch"),
       mode: z.enum(["replace", "add", "remove"]).optional().describe("replace (default) | add | remove"),
@@ -203,6 +203,48 @@ server.registerTool(
   async ({ watch, mode }) => {
     if (!SELF) return needSelf();
     return text(JSON.stringify(await cv.subscribe(SELF, watch, mode)));
+  }
+);
+
+server.registerTool(
+  "cv_gh_subscriptions",
+  {
+    description:
+      "What your user's seats watch of GitHub (gh: titles, @github), which seats, and the token that reads each repository — or that none reaches it, so it is never read. Subscribe with cv_subscribe.",
+    inputSchema: {},
+  },
+  async () => {
+    const { subscriptions } = await cv.githubSubscriptions();
+    if (!subscriptions?.length) return text("(no GitHub subscriptions)");
+    return text(
+      subscriptions
+        .map((s) => {
+          const via = s.repo
+            ? s.token
+              ? `read with ${s.token.label} (${s.token.kind})`
+              : s.unreached === "repos_not_loaded"
+                ? "a token's repository list is not loaded yet (the server loads it within a minute)"
+                : "NO TOKEN REACHES IT: not read"
+            : s.reached ? "" : "no usable token";
+          const read = s.last_read_at ? `, last read ${s.last_read_at}Z` : "";
+          return `${s.title} — ${s.seats.join(", ")}${via ? ` — ${via}` : ""}${read}`;
+        })
+        .join("\n")
+    );
+  }
+);
+
+server.registerTool(
+  "cv_gh_repos",
+  {
+    description: "Every GitHub repository the operator's tokens reach, and the token each would be read with (the least-privileged that reaches it). Filter with q (a substring of owner/name).",
+    inputSchema: { q: z.string().optional().describe("substring of owner/name, case-insensitive") },
+  },
+  async ({ q }) => {
+    const { repos } = await cv.githubRepos();
+    const want = (q ?? "").toLowerCase();
+    const hits = (repos ?? []).filter((r) => r.repo.toLowerCase().includes(want));
+    return text(hits.length ? hits.map((r) => `${r.repo} — ${r.token.label} (${r.token.kind})`).join("\n") : "(no repositories match)");
   }
 );
 
@@ -228,13 +270,16 @@ server.registerTool(
   "cv_ack",
   {
     description:
-      "Clear pings you've already handled so you aren't re-notified. Pass a watched title, or omit to clear all. (cv_send / cv_answer auto-ack their target.)",
-    inputSchema: { session: z.string().optional().describe("watched title to clear; omit for all") },
+      "Clear queued pings you have SEEN in cv_pending, so they are not delivered. A delivered \"[claudiverse] … ready\" ping is already cleared: there is nothing to ack after one. A ping queued after you were shown your pings is never cleared by this, with or without a title: it is delivered on your next idle. Pass a watched title to clear only its pings, or omit for all you were shown. (cv_send / cv_answer / cv_decline clear their target's queued pings themselves.)",
+    inputSchema: { session: z.string().optional().describe("watched title to clear; omit for every ping you were shown") },
   },
   async ({ session }) => {
     if (!SELF) return needSelf();
-    await cv.ack(SELF, session || "all");
-    return text("acked " + (session || "all"));
+    const r = await cv.ack(SELF, session || "all");
+    return text(
+      `cleared ${r?.cleared ?? "?"} ping(s) you were shown${session ? ` for ${session}` : ""}` +
+        (r?.kept ? `; ${r.kept} not yet shown stay queued and come on your next idle` : "")
+    );
   }
 );
 
@@ -298,7 +343,7 @@ server.registerTool(
     const id = await cv.resolveSession(session);
     const r = await cv.send(id, t);
     if (r.status === "delivered") {
-      if (SELF) await cv.ack(SELF, session).catch(() => {});
+      if (SELF) await cv.ack(SELF, session, { acted: true }).catch(() => {});
       return text("delivered");
     }
     if (r.status === "busy") {
@@ -331,7 +376,7 @@ server.registerTool(
   async ({ session, text: t }) => {
     const id = await cv.resolveSession(session);
     const r = await cv.answer(id, t);
-    if (SELF) await cv.ack(SELF, session).catch(() => {});
+    if (SELF) await cv.ack(SELF, session, { acted: true }).catch(() => {});
     return text(answerOutcome("answered", session, r));
   }
 );
@@ -345,7 +390,7 @@ server.registerTool(
   async ({ session }) => {
     const id = await cv.resolveSession(session);
     const r = await cv.decline(id);
-    if (SELF) await cv.ack(SELF, session).catch(() => {});
+    if (SELF) await cv.ack(SELF, session, { acted: true }).catch(() => {});
     return text(answerOutcome("declined", session, r));
   }
 );
@@ -1837,7 +1882,11 @@ server.registerTool(
       "Signal that your task is COMPLETE. This is the ONLY thing that tells a runner it may reap you — going idle does NOT, because an idle seat that has finished and one that is mid-thought are indistinguishable. REFUSES until you have written a handoff: your context is about to be destroyed and it is the only state that survives.",
     inputSchema: {
       task_id: z.number().int().describe("the task post id you were assigned"),
-      outcome: z.string().describe("what you did and what the result was — including 'could not do it', which is a valid outcome"),
+      outcome: z
+        .string()
+        .describe(
+          "what you did and what the result was — including 'could not do it', which is a valid outcome. If you ran NONE of the task's work (a duplicate dispatch, nothing to change), START with 'NO-OP:' or 'DUPLICATE:' — then no validator is minted for it."
+        ),
       ledger_delta: z
         .string()
         .describe(
@@ -2007,11 +2056,18 @@ server.registerTool(
     // that fleet's managers watch. A finished task is useful once: the record
     // is the task event above, not a post every subscriber is pinged about.
     // Operator, 2026-10-02: the forum is for what needs remembering.
+    // A server that announces the DONE itself (`announced`: it pinged
+    // tasks:<lane> on the transition) needs no ping from here. MEASURED
+    // 2026-10-14: #2167's DONE pinged nobody, as this ping went out only with
+    // CV_TASK_REPORT=notify, which the wc3 fleet's worker config lacked.
+    const announced = r?.announced ?? null;
     if (lane && process.env.CV_TASK_REPORT === "notify") {
-      try {
-        await cv.report(`tasks:${lane}`, `DONE task #${task_id} (${SELF}): ${clip(outcome, 160)} — cv_task_show ${task_id}`);
-      } catch (e) {
-        reportNote += `\n⚠️ the task IS complete and the report is on the task, but the done-ping to tasks:${lane} failed: ${String(e.message || e)}`;
+      if (!announced) {
+        try {
+          await cv.report(`tasks:${lane}`, `DONE task #${task_id} (${SELF}): ${clip(outcome, 160)} — cv_task_show ${task_id}`);
+        } catch (e) {
+          reportNote += `\n⚠️ the task IS complete and the report is on the task, but the done-ping to tasks:${lane} failed: ${String(e.message || e)}`;
+        }
       }
     } else if (lane) {
       try {
@@ -2019,7 +2075,9 @@ server.registerTool(
           title: `DONE — task #${task_id}: ${clip(outcome, 60)}`,
         });
       } catch (e) {
-        reportNote += `\n⚠️ the task IS complete and the report is on the task, but posting it to #${lane} failed: ${String(e.message || e)}`;
+        // A task-table lane need not have a forum channel: a top-level post's only 404.
+        if (announced && /\b404\b/.test(String(e.message || e))) reportNote += `\n(no forum channel #${lane}: the server pinged ${announced} itself.)`;
+        else reportNote += `\n⚠️ the task IS complete and the report is on the task, but posting it to #${lane} failed: ${String(e.message || e)}`;
       }
     } else {
       reportNote += `\n⚠️ the task IS complete, but its lane could not be read, so no forum report was posted. The report is on the task.`;

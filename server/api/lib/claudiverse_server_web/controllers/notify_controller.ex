@@ -43,7 +43,10 @@ defmodule ClaudiverseServerWeb.NotifyController do
     end
   end
 
-  # POST /api/notify/ack  %{"self" => title, "target" => title | "all"}
+  # POST /api/notify/ack  %{"self" => title, "target" => title | "all", "acted" => bool}
+  # Clears only pings the listener was shown (Router: cv_pending marks them);
+  # `acted` (cv_send/cv_answer/cv_decline on that title) clears its queued ones.
+  # Answers how many it cleared and how many stay for the next idle.
   def ack(conn, params) do
     self_title = Map.get(params, "self")
     target = case Map.get(params, "target", "all") do
@@ -51,14 +54,16 @@ defmodule ClaudiverseServerWeb.NotifyController do
       t -> t
     end
 
-    Router.ack(self_title, target)
-    json(conn, %{ok: true})
+    mode = if params["acted"] in [true, "true"], do: :acted, else: :shown
+    %{cleared: cleared, kept: kept} = Router.ack(self_title, target, mode)
+    json(conn, %{ok: true, cleared: cleared, kept: kept})
   end
 
-  # GET /api/notify/pending?self=title
+  # GET /api/notify/pending?self=title — what is queued; listing it marks it
+  # shown, so cv_ack may clear it.
   def pending(conn, params) do
     self_title = Map.get(params, "self")
-    json(conn, %{queue: Router.peek(self_title)})
+    json(conn, %{queue: Router.pending(self_title) |> Enum.map(&Map.delete(&1, :shown))})
   end
 
   # POST /api/notify/send  %{"session_id" => id, "content" => text}
@@ -156,6 +161,28 @@ defmodule ClaudiverseServerWeb.NotifyController do
       json(conn, %{ok: true})
     else
       conn |> put_status(:bad_request) |> json(%{error: "missing self"})
+    end
+  end
+
+  # POST /api/notify/direct  %{"self" => sender_title, "to" => seat_title, "text" => text}
+  # One seat, by title, whether it watches anything or not (Router.direct/3):
+  # a runner telling the seat that wrote a task its worker needs a human. Only
+  # a seat of the caller's own (any row by that title, running or not: a seat
+  # not seen yet gets it when it is). 404 otherwise.
+  def direct(conn, params) do
+    user = conn.assigns.current_user
+    {from, to, text} = {params["self"], params["to"], params["text"]}
+
+    cond do
+      not (is_binary(from) and from != "" and is_binary(to) and to != "" and is_binary(text) and text != "") ->
+        conn |> put_status(:bad_request) |> json(%{error: "self, to and text are required"})
+
+      not Sessions.user_has_title?(user.id, to) ->
+        conn |> put_status(:not_found) |> json(%{error: "no seat titled #{to}"})
+
+      true ->
+        Router.direct(to, from, String.slice(text, 0, 2000))
+        json(conn, %{ok: true})
     end
   end
 

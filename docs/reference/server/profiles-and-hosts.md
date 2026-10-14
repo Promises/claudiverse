@@ -131,6 +131,7 @@ Fields (everything except `id`, `last_start` and the timestamps is writable):
 | `mcp` | list of strings | `[]` | each matches the `name` format; names from the machine's catalog |
 | `pooled` | boolean | **true** | a pooled seat goes out with the preferred account and fails over with the pool |
 | `autostart` | boolean | false | start when the machine's agent comes online |
+| `protected` | boolean | false | a bulk restart leaves its seat out unless named; restarting it alone is confirmed (see "Restart idle seats") |
 | `resume` | string | `latest` | `latest`, `new`, or a conversation UUID |
 | `debug` | boolean | false | |
 | `last_start` | map or null | null | server-written, see below |
@@ -210,6 +211,21 @@ Rules, from `Adopt`:
 - The suggested runtime is `stock+mod` unless the seat's client version contains `[claudiverse]` without `[claudiverse-mod]`, which suggests `patched`. `pooled` is suggested true except for `patched`.
 - If the agent reports that the transcript for the conversation is not in the runtime's config dir, the preview returns `blocked` with a sentence saying so.
 
+### Restart idle seats
+
+`Restarts` restarts idle seats on their machine's current Claude Code runtime, to pick up a new build or mod: the host agent's `restart_seat` stops a seat cleanly and starts it again on the same conversation, with what its process was started with (see the host agent's [Seat control](../host-agent/seat-control.md)). A seat running in a plain terminal comes back in tmux: adopted into the seats the agent runs, not into a profile. A profile's seat is restarted by its profile.
+
+Only idle seats, strictly, checked by the server and then again by the machine right before the stop:
+
+- running, on a machine that is online; not a runner's worker (origin `runner`); not the caller's own seat (`caller`) unless `include_self`;
+- the filters: `fleets`, `exclude_fleets`, `exclude_session_ids`; `session_ids` (exactly those); a paused fleet's seats left out unless `exclude_paused: false` or named; a protected seat (its profile's `protected`) only when named in `session_ids`, or alone with `confirm_protected`; `only_outdated` (its client version is not the version it would get);
+- its room idle, readiness known, no agent working, no background task running, no permission prompt open, no AskUserQuestion open (the last one in its replay with no answer after it), and nothing from it for 60 s;
+- then the machine (`restart_plan`): its own record idle for 60 s (300 s in a plain terminal, where unsent text cannot be seen), no dialog and nothing typed in a tmux prompt, its conversation in its config folder, and every check its start will make, so a seat that could not start again is never stopped: `max_seats` above all (`max_seats`: the seat being restarted is counted out, but one its agent did not start needs a free place).
+
+A seat that fails a check is skipped with its reason, never queued; so is one its machine refuses at the restart itself, before the stop (it went busy, or it could no longer start again). In a dry run nothing has been restarted, so each seat's plan is checked with the places under `max_seats` that the seats planned before it on the same machine would take (`taking` in `restart_plan`). A bulk restart goes one seat at a time: each waits for its new row to register (a mod seat re-registers on its own row) and reads its client version, up to 90 s, before the next; a row the restart replaced is ended. A seat started again whose row does not register in that time is `failed` (`not_registered`): it may be running, but nothing saw it come back. Its mode is the one its room last heard; with none heard, the machine uses the mode its process was started with. Effort is carried from the process's command line; a seat started without one gets the binary's default.
+
+`paused` is per fleet (`fleet_settings`, `Fleets`): `PATCH /api/fleets/:fleet {"paused"}` (app or super), and `paused` in `GET /api/fleets`.
+
 ## Configuration
 
 There are no environment variables. These Application config keys are read at call time with `Application.get_env(:claudiverse_server, key, default)`; none of them is set in `config/*.exs`, so the defaults apply unless you add them (the tests override them).
@@ -219,6 +235,7 @@ There are no environment variables. These Application config keys are read at ca
 | `host_spawn_interval_ms` | `10_000` | Minimum gap between spawn, resume and profile-start requests to the same `(user, host)`. Shared by all three. Also paces autostart (plus 500 ms). |
 | `host_spawn_timeout_ms` | `120_000` | How long the server waits for the agent to reply to `spawn`, `resume` or `start_profile`. |
 | `host_adopt_timeout_ms` | `30_000` | After the agent replies, how long the server polls (every 500 ms) for the new seat's row to register. If none appears, `started_as` / `resumed_as` is null. |
+| `restart_register_ms` | `90_000` | After a restart, how long the server polls (every second) for the seat's row to register again. If none does, the outcome is `failed` with `not_registered`. |
 
 Other fixed values in the code: ordinary requests (`ls`, `stop`, `add_root`, `remove_root`) wait 10 s; `locate_seat` 15 s; `release_seat` 30 s; `set_mode` 15 s. A profile's `starting` status expires after 180 s; autostart skips profiles that failed in the last 600 s.
 
@@ -262,6 +279,8 @@ Join `operator:events` with an `app` or `super` (or any non-host) token. Host to
 |---|---|
 | `host` | `{"name", "online", "last_seen_at"}`: a machine's agent joined or left. Refetch `GET /api/hosts` for the rest |
 | `host_spawn` | `{"spawn_id", "host", "op": "spawn"\|"resume", "title", "ok", "error", "started_as"}`; for resume also `"session_id"` (the row resumed) and `"resumed_as"` (the row the running seat registered, or null) instead of `started_as`. `error` is `"<code>: <message>"`, `"timeout"` or `"offline"` when `ok` is false |
+| `seat_restart` | One seat's restart: `{"restart_id", "batch_id" (null alone), "session_id" (the old row), "title", "host", "outcome": started\|restarted\|adopted\|skipped\|failed, "reason", "reason_code", "old_version", "new_version", "new_session_id" (the row it registered, null if not within 90 s), "killed", "note"}`. `started` comes first, then one final event. |
+| `restart_batch` | `{"batch_id", "host" (null for every machine), "state": started\|done, "total", "counts": {"restarted", "adopted", "skipped", "failed"}}` |
 | `profile` | `{"op", "profile"}` where `profile` is the profile as `GET /api/profiles` lists it. `op` is one of `created`, `updated`, `deleted` (profile is then only `{id, name}`), `start`, `stopped`, `renamed` |
 
 The channel also carries `runner` and `pool` events, covered in other pages. Start outcomes for a profile are `profile` events with `op: "start"`: first with status `starting`, later with `running`, `failed` and so on.
@@ -275,7 +294,7 @@ All under `/api`, Bearer token. "App" means an `app` or `super` token.
 | `GET /hosts` | any | `{"hosts": [{name, online, seats, roots, remote_roots, version, modes, runtimes, mcp, spawn, last_seen_at}]}`: online agents, any host name that has running seats, and every machine an agent has joined as, sorted by name. `seats` counts running non-proxy rows. `version` to `spawn` come from the join payload (empty or null for an offline host or an older agent). `last_seen_at` is the agent's last join or leave (null for a machine never seen since the `machines` table exists). |
 | `GET /hosts/:host/recent_dirs` | any | `{"dirs": [{path, last_used_at, seats_running}]}`: up to 20 distinct working directories of this user's past seats on that host, newest first. |
 | `GET /hosts/:host/ls?path=` | any | Relayed to the agent as `ls`; its result is returned as is. 504 `host <h> is offline` or `host <h> did not answer`; agent refusals as above. |
-| `POST /hosts/:host/spawn` | app | Body `path` (required, non-empty), `title` (optional, `A-Za-z0-9._-`, 1-64), `mode` (default `auto`; one of `default`, `acceptEdits`, `plan`, `auto`), `prompt` (optional, at most 20 000 characters), `model` (optional: a model id or alias, e.g. `claude-haiku-4-5` or `opus`; the new seat's row shows it until its first reply), `pooled` (optional boolean: use the server's account pool; a pool-only machine always does). 202 `{"spawn_id"}`. 400 on a bad field, 403 `spawning seats is app-only`, 409 when `model` or `pooled` is asked of a machine whose agent doesn't offer it (older than 0.13: update it), 429 `one spawn per 10 s per host`, 504 if the host is offline. |
+| `POST /hosts/:host/spawn` | app | Body `path` (required, non-empty), `title` (optional, `A-Za-z0-9._-`, 1-64), `mode` (default `auto`; one of `default`, `acceptEdits`, `plan`, `auto`), `prompt` (optional, at most 20 000 characters), `model` (optional: a model id or alias, e.g. `claude-haiku-5-5` or `opus`; the new seat's row shows it until its first reply), `pooled` (optional boolean: use the server's account pool; a pool-only machine always does). 202 `{"spawn_id"}`. 400 on a bad field, 403 `spawning seats is app-only`, 409 when `model` or `pooled` is asked of a machine whose agent doesn't offer it (older than 0.13: update it), 429 `one spawn per 10 s per host`, 504 if the host is offline. |
 | `POST /sessions/:id/stop` | app | Asks the seat's machine to close its tmux session (`stop`, by the seat's title). On success the room is ended and the answer is `{"ok": true, "host", "title"}`. |
 | `POST /sessions/:id/resume` | app | Optional body `title`, `mode`. Restarts a stopped seat with `claude --resume`. 202 `{"spawn_id"}`; the outcome is `host_spawn` with `op: "resume"`. The session id used is the row's `conversation_id`, else its `claude_session_id`; the mode defaults to the seat's last mode if it is one of the four, else `auto` (so a seat that ran in `bypassPermissions` resumes in `auto`). Shares the spawn rate limit. |
 | `POST /hosts/:host/token` | super | Mints a host token for the name (`A-Za-z0-9._-`, 1-128). 201 `{"name", "token"}`; 400 on a bad name. Put the token in the agent's config. |
@@ -323,6 +342,26 @@ curl -sS -X POST https://claudiverse.example/api/profiles \
 curl -sS -X POST https://claudiverse.example/api/profiles/1/start -H "Authorization: Bearer $TOKEN"
 # 202 {"profile": {... "status": "starting", "last_start": {"outcome": "starting", ...}}}
 ```
+
+### HTTP: restart idle seats
+
+App or super token only (403 `restarting seats is app-only`). Booleans are JSON booleans.
+
+| Method and path | Behaviour |
+|---|---|
+| `POST /sessions/:id/restart` | Body: `dry_run`, `confirm_protected`, `include_self`, `caller` (the session id of the seat asking). 200 `{"seat"}` with `dry_run`; else 202 `{"restart_id", "seat"}` and the outcome as `seat_restart`. Not eligible: 409 `{"error", "reason_code"}`; its machine offline: 504. 404 for a seat that is not the user's. |
+| `POST /hosts/:host/restart_idle`, `POST /hosts/restart_idle` (every machine) | Body: `session_ids`, `exclude_session_ids`, `fleets`, `exclude_fleets`, `exclude_paused` (default true), `only_outdated`, `dry_run`, `caller`, `include_self`. 200 `{"seats"}` with `dry_run`; else 202 `{"batch_id", "seats"}`, restarted one at a time (`seat_restart`, `restart_batch`). |
+
+A plan entry (`seat`, each of `seats`):
+
+```json
+{"session_id": 123, "title": "lorem-w1", "host": "lorem-mac", "fleet": "lorem", "origin": "spawn", "protected": false,
+ "action": "restart", "reason": null, "reason_code": null, "client_version": "2.1.292", "target_version": "2.1.296",
+ "launch": {"via": "spawn", "argv": ["--permission-mode", "--model", "--mcp-config", "--resume"], "env": ["CLAUDE_CONFIG_DIR"],
+            "carried": ["--model", "--mcp-config"], "dropped": ["--name (the seat's title is set anew)"]}}
+```
+
+`action` is `restart`, `adopt` (a plain-terminal seat) or `skip`, with `reason` (a sentence) and `reason_code`: `busy`, `background`, `question`, `permission`, `recent_activity`, `runner`, `self`, `excluded`, `fleet`, `paused`, `protected`, `up_to_date`, `not_running`, `no_machine`, `offline`, `not_found`, `max_seats`, `refused`; and after the stop, `not_restarted` (the machine could not start it again, twice: `reason` has the command that resumes it by hand, and its row is ended) or `not_registered`. `launch` (names, never values) is there for a seat its machine looked at. An agent older than 0.14 gives `refused`, saying to update it.
 
 ### HTTP: adopt
 

@@ -18,6 +18,14 @@ export const isValidationTask = (t) => Boolean(t.validatesTaskId) || (t.title ||
 // validates_task_id, which the server stores for exactly this.
 const NAMES_A_VALIDATED_TASK = /\bVALIDATE #\d+/;
 
+// A worker that did nothing says so FIRST in its outcome: "NO-OP …" or
+// "DUPLICATE …" (cv_task_done asks for that). There is no work for a second
+// seat to re-derive. MEASURED 2026-10-12: #31185, a duplicate dispatch whose
+// seat correctly ran none of it ("NO-OP. This was a duplicate dispatch."), got
+// validator #31192 all the same. Only a declaration at the start counts: an
+// outcome that merely mentions the words keeps its validator.
+const DECLARED_NOOP = /^[\s*_>#-]*(NO-OP|DUPLICATE)\b/i;
+
 // Why a finished task gets NO auto-minted validation, or null if it should.
 // The title-prefix check alone missed every validator the orchestrator minted
 // with its own title and every post-landing gate. MEASURED on lorem-fleet window C
@@ -33,7 +41,10 @@ const NAMES_A_VALIDATED_TASK = /\bVALIDATE #\d+/;
 // slot could have run. Never inferred from the runner's own channel, which a
 // runner with no --validate-channel also posts to: that would exempt all its
 // production.
-export function validationExemption(task, { validateLane = null } = {}) {
+//
+// `outcome`: what the worker's cv_task_done said it did (cv-reap.mjs reads it
+// off the task), or null when it could not be read.
+export function validationExemption(task, { validateLane = null, outcome = null } = {}) {
   if (task.validatesTaskId) return `it is itself a validation (validates_task_id=${task.validatesTaskId})`;
   if (validateLane && task.lane === validateLane) return `it came from the validation lane #${validateLane}`;
   const title = task.title || "";
@@ -41,5 +52,6 @@ export function validationExemption(task, { validateLane = null } = {}) {
     return "its title marks it as a validation";
   if (/POST-LANDING GATE/i.test(title)) return "it is a post-landing gate, itself the independent check";
   if ((task.body || "").includes(NO_AUTO_VALIDATE)) return `its body carries ${NO_AUTO_VALIDATE}`;
+  if (outcome && DECLARED_NOOP.test(outcome)) return `its outcome declares it a no-op ("${outcome.slice(0, 60)}")`;
   return null;
 }

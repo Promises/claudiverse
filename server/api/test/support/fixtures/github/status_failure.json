@@ -1,0 +1,2 @@
+{"state": "failure", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "total_count": 1,
+ "statuses": [{"state": "failure", "context": "ci/build", "description": "Build failed"}]}

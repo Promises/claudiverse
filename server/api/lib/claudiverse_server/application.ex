@@ -14,6 +14,10 @@ defmodule ClaudiverseServer.Application do
        repos: Application.fetch_env!(:claudiverse_server, :ecto_repos), skip: skip_migrations?()},
       {DNSCluster, query: Application.get_env(:claudiverse_server, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ClaudiverseServer.PubSub},
+      # Background work started from a request, a channel or a Room (a spawn's
+      # outcome, a restart batch, a profile autostart): supervised, so it is
+      # logged when it crashes and can be found (tests stop it between tests).
+      {Task.Supervisor, name: ClaudiverseServer.Tasks},
       {Registry, keys: :unique, name: ClaudiverseServer.Sessions.Registry},
       ClaudiverseServer.Sessions.Supervisor,
       # Stops "running" rows nothing can stop any more (no Room, long idle).
@@ -28,9 +32,12 @@ defmodule ClaudiverseServer.Application do
       # limit gets noticed without a client patch: seats run stock and cannot
       # report a 429 themselves.
       ClaudiverseServer.AnthropicAuths.UsagePoller,
+      ClaudiverseServer.AnthropicAuths.UsageDaily,
       # The API proxy (ClaudiverseServerWeb.ProxyPlug): its upstream client and
       # one observer per Claude session it carries.
       {Finch, name: ClaudiverseServer.Proxy.Finch, pools: %{default: [size: 64, conn_max_idle_time: 60_000]}},
+      # GitHub's API, for the operator's subscriptions (GitHub).
+      {Finch, name: ClaudiverseServer.GitHub.Finch},
       {Registry, keys: :unique, name: ClaudiverseServer.Proxy.Registry},
       {DynamicSupervisor, name: ClaudiverseServer.Proxy.Supervisor, strategy: :one_for_one},
       # The pool credential pooled proxy seats go out with (Proxy.Credentials).
@@ -50,6 +57,8 @@ defmodule ClaudiverseServer.Application do
       # A seat whose turn died on an empty pool or a restart gets one
       # "continue" when the server can serve it again (AutoResume).
       ClaudiverseServer.AutoResume.Server,
+      # Reads GitHub for the gh: titles seats watch (GitHub.Poller).
+      ClaudiverseServer.GitHub.Poller,
     ] ++ ClaudiverseServer.Hosts.child_specs() ++ [
       ClaudiverseServerWeb.Endpoint
     ]

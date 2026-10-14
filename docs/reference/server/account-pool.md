@@ -267,6 +267,26 @@ The stored snapshot is the only state, so a crossing fires once, an unchanged re
 
 Auto-resume listens on the same topic: at every `pool` event, and every 30 s, a seat whose turn died on `no_available_auth` gets one `continue` once `pick/0` finds an account again, and a weekly `reset` re-arms a seat whose `continue` was refused too. See [auto-resume.md](auto-resume.md).
 
+### Usage history
+
+Every usage reading (the poll every 5 minutes, and the panel's Check usage) is also kept as a sample in `usage_samples` (`UsageHistory.record/3`): the account, the time, the weekly percent and when it resets, the session percent and when it resets. A failed write is logged and never costs the reading. There is no history before this shipped (2026-10-12): it was not backfilled, because the server's log holds only the `POOL step` crossings (multiples of 5 and 10), and seeding from them would invent the readings in between.
+
+`GET /api/anthropic_auths/usage_history` turns the samples into days in a local time zone (default `Europe/Oslo`):
+
+- A day's `weekly_used_pct` is the percentage points of the weekly limit used that day: each step between two consecutive readings adds its rise, never a fall. Across a weekly reset the step adds the new period's reading (everything used since the reset), so a day that spans a reset sums correctly; its end minus its start would be negative. A reset is `resets_at` moving to a later period (more than an hour later), or the old one passing with none reported, the rule `pool` events use. The reset's instant is the old period's `resets_at` when it falls between the two readings, else the later reading's time (an early reset).
+- A step counts on the day of its later reading. A step over more than 3 hours counts on no day: what was used during an outage is not known to be that day's.
+- A day with no readings has every value null and `samples` 0, never 0%; a day with readings and no use is `0.0`.
+
+Thinning (`UsageHistory.thin/1`) keeps the table small without changing any day's sum: every sample for 48 hours; then the last sample of each 15-minute UTC bucket; after 30 days, of each hour. A sample is kept regardless when dropping it could change a sum: the last before a reset and the first after, a peak or a trough, one beside a gap of 30 minutes or more, one without a weekly reading and its neighbours. Between two kept samples what remains is then a rise within one period inside one bucket, so the step between them is the same sum; that needs local midnight on a bucket boundary, true for a zone a whole number of hours from UTC (Europe/Oslo). Samples older than 400 days are deleted. Per account that is 288 rows a day (one every 5 minutes) for the first two days, then about 96 a day to 30 days, then about 24 a day, plus the few kept at resets, falls and gaps.
+
+`UsageDaily` runs a minute after local midnight (`CV_USAGE_TZ`, default `Europe/Oslo`): it writes the day that ended to the server log as one line, then thins.
+
+```
+[usage] 2026-10-12 (Europe/Oslo) weekly use: Personal +18% (10% → 28%), Work +9% (25% → 34%, reset 09:00)
+```
+
+An account without readings that day says `no readings`. A day missed while the server was down gets no line afterwards; the endpoint has it.
+
 ## Configuration
 
 Environment variables (read at call time). The full list with other settings is in [configuration.md](configuration.md).
@@ -277,6 +297,7 @@ Environment variables (read at call time). The full list with other settings is 
 | `CV_USAGE_POLL` | enabled | `0` disables the poller (also disables the `reconsider` and upgrade/degrade announcements). Anything else leaves it on. |
 | `CV_USAGE_POLL_MS` | `300000` | Poll interval in ms. Values under `30000`, or non-numeric, fall back to the default. |
 | `CV_USAGE_COOLDOWN_PCT` | `95` | A limit at or above this percent cools the account. Accepts 1 to 100; otherwise the default. |
+| `CV_USAGE_TZ` | `Europe/Oslo` | The zone of the daily `[usage]` log line, and the default `tz` of `usage_history`. |
 
 No `config :claudiverse_server` keys. Fixed constants in code: default 429 cooldown 15 minutes, suspect-report cap 120 s, snapshot freshness 180 s, suspect threshold 80%, token validity skew 60 s, lock timeout 45 s, first poll delay 30 s.
 
@@ -294,6 +315,7 @@ All routes are under `/api` and need a Bearer token (the `:authenticated` pipeli
 | `POST /api/anthropic_auths/complete` | Finish enrolment. |
 | `POST /api/anthropic_auths/:id/reauthorize/complete` | Re-authorize this account from a fresh `authorize` (app or super token). |
 | `POST /api/anthropic_auths/:id/usage` | Read usage now. |
+| `GET /api/anthropic_auths/usage_history` | Each account's use of its weekly limit per local day (any token). |
 | `POST /api/anthropic_auths/:id/preferred` | Make this account the preferred one (app or super token). |
 | `DELETE /api/anthropic_auths/:id` | Remove an account. |
 
@@ -415,6 +437,43 @@ Body: `code` and `verifier` (required), `state`, `force` (boolean; the string `"
 - `POST /api/anthropic_auths/:id/preferred` requires an app or super token; a plain API token gets `403 {"error": "choosing the preferred account is app-only"}`. It renumbers priorities to 10, 20, 30, ... with this account first and the others in their current order, drops the proxy's cached lease, triggers a poller re-evaluation, and broadcasts a `pool` event `preferred` with `by` set to the caller's email. Returns `{"auths": [...], "current_id": n}`. Preferred means first choice, not forced: a cooling or `needs_reauth` account is still skipped and used again on recovery.
 - `DELETE /api/anthropic_auths/:id` returns `{"deleted": "account-a"}` and removes the account and its seat assignments. It does not broadcast a `pool` event, and the proxy's cached lease is not dropped, so a pooled seat may keep using a deleted account's token until the lease renews.
 
+### Usage history
+
+`GET /api/anthropic_auths/usage_history?days=28&tz=Europe/Oslo&raw=1`. Any token may read it, as the list. `days` is 1 to 400 (default 28), `tz` an IANA zone (default `CV_USAGE_TZ`, else `Europe/Oslo`), `raw=1` adds each account's samples. `400 {"error": ...}` for a bad `days` or `tz`.
+
+```json
+{
+  "tz": "Europe/Oslo",
+  "from": "2026-09-15",
+  "to": "2026-10-12",
+  "generated_at": "2026-10-12T10:31:07Z",
+  "accounts": [
+    {
+      "id": 3,
+      "label": "account-a",
+      "weekly_resets_at": "2026-10-16T07:00:00Z",
+      "reset_times": ["2026-10-09T07:00:00Z"],
+      "days": [
+        {"date": "2026-10-09", "weekly_used_pct": 21.5, "weekly_pct_start_of_day": 96.0, "weekly_pct_end_of_day": 20.0,
+         "reset_in_day": true, "samples": 288, "partial": false},
+        {"date": "2026-10-10", "weekly_used_pct": null, "weekly_pct_start_of_day": null, "weekly_pct_end_of_day": null,
+         "reset_in_day": null, "samples": 0, "partial": false}
+      ],
+      "samples": [
+        {"at": "2026-10-09T00:03:00Z", "weekly_pct": 96.0, "weekly_resets_at": "2026-10-09T07:00:00Z",
+         "session_pct": 4.0, "session_resets_at": "2026-10-09T03:00:00Z"}
+      ]
+    }
+  ]
+}
+```
+
+- `from` and `to` are local dates; `to` is today, whose day has `partial: true`. `days` lists every date from `from` to `to`, oldest first, so it is always `days` long.
+- `weekly_pct_start_of_day` is the last reading before the day (null if none), `weekly_pct_end_of_day` the day's last. On a reset day the start can be above the end.
+- `weekly_resets_at` is the account's latest known next weekly reset, from its newest reading that has one, whatever the window; null if never seen. `reset_times` are the weekly resets inside the window, oldest first.
+- `samples` (with `raw=1`) are the readings in the window, oldest first. They thin with age: every ~5 minutes for 48 hours, then one per 15 minutes, then hourly after 30 days.
+- Percentages are floats from 0 to 100, and any can be null (a reading without that limit). Removed accounts are not listed.
+
 ## Failure modes and troubleshooting
 
 | Symptom | Cause and action |
@@ -456,6 +515,7 @@ Body: `code` and `verifier` (required), `state`, `force` (boolean; the string `"
 - `server/api/lib/claudiverse_server/anthropic_auths/vault.ex`
 - `server/api/lib/claudiverse_server/anthropic_auths/refresh_lock.ex`
 - `server/api/lib/claudiverse_server/anthropic_auths/usage_poller.ex`
+- `server/api/lib/claudiverse_server/anthropic_auths/usage_history.ex`, `usage_sample.ex`, `usage_daily.ex`
 - `server/api/lib/claudiverse_server_web/controllers/anthropic_auth_controller.ex`
 - `server/api/lib/claudiverse_server_web/channels/operator_channel.ex`
 - `server/api/lib/claudiverse_server_web/plugs/auth.ex`

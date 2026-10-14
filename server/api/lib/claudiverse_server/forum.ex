@@ -289,6 +289,12 @@ defmodule ClaudiverseServer.Forum do
   still holds and is simpler: SQLite serialises writers, so the second UPDATE
   runs after the first commits, sees a non-nil owner, and matches zero rows.
 
+  The same statement requires the post to be still `incoming` and not archived.
+  A runner claims from a list it read a moment before, and a post set done or
+  archived in between was claimed anyway: MEASURED 2026-10-12, ipsum-orchestrator set
+  validator #31192 done as a held duplicate and runner ipsum-w7 still ran a seat
+  on it. Such a post is `{:error, {:not_claimable, status}}`.
+
   If `busy_timeout` is too low the loser may get `SQLITE_BUSY` instead of a
   clean zero. That surfaces to the client as a THROW, and `cv-runner` treats a
   throw as "we do not know" — skip and retry next poll — never as "won". So the
@@ -297,7 +303,7 @@ defmodule ClaudiverseServer.Forum do
   def claim_post(id, owner, actor \\ nil) when is_binary(owner) and owner != "" do
     {count, _} =
       Post
-      |> where([p], p.id == ^id and is_nil(p.owner))
+      |> where([p], p.id == ^id and is_nil(p.owner) and p.status == "incoming" and is_nil(p.archived_at))
       |> Repo.update_all(set: [owner: owner, updated_at: now()])
 
     case count do
@@ -308,11 +314,13 @@ defmodule ClaudiverseServer.Forum do
         {:ok, post}
 
       0 ->
-        # Zero rows means one of two things and the caller must be able to tell
-        # them apart: the post does not exist, or somebody else holds it.
+        # Zero rows: the post does not exist, somebody else holds it, or it is
+        # no longer a task to take (done, archived). The caller tells them apart.
         case get_post(id) do
           nil -> {:error, :not_found}
-          %Post{owner: holder} -> {:error, {:already_claimed, holder}}
+          %Post{owner: holder} when is_binary(holder) -> {:error, {:already_claimed, holder}}
+          %Post{archived_at: %{}} -> {:error, {:not_claimable, "archived"}}
+          %Post{status: status} -> {:error, {:not_claimable, status || "no status"}}
         end
     end
   end

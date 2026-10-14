@@ -357,6 +357,13 @@ defmodule ClaudiverseServerWeb.ForumController do
           |> put_status(:conflict)
           |> json(%{ok: false, claimed: false, held_by: holder})
 
+        # Also 409 with held_by null: an older runner reads it as a lost race
+        # and skips, which is right for a post that is no longer a task.
+        {:error, {:not_claimable, why}} ->
+          conn
+          |> put_status(:conflict)
+          |> json(%{ok: false, claimed: false, held_by: nil, not_claimable: why})
+
         {:error, :not_found} ->
           not_found_post(conn, id)
       end

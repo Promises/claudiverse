@@ -1,6 +1,6 @@
 # cv-spawn.sh: starting a seat
 
-`cv-spawn.sh` starts one Claude Code instance (a seat) in a detached tmux session, mirrored to the Claudiverse server. It is the single spawn primitive: `cv-runner`, `cv-mcp`'s `cv_spawn` tool and each machine's host agent all run this script, so there is one definition of how a seat launches. The script allocates the tmux terminal and the process lifecycle; the seat's own Claudiverse client (the claudiverse-seat mod) does the mirroring and takes input. The script also sets `CLAUDIVERSE_SKIP_TRUST=1`, which a patched Claude Code binary reads to skip the "trust this folder?" gate without editing `~/.claude.json`; the claudiverse-seat mod does not read it.
+`cv-spawn.sh` starts one Claude Code instance (a seat) in a detached tmux session, mirrored to the Claudiverse server. It is the single spawn primitive: `cv-runner`, `cv-mcp`'s `cv_spawn` tool and each machine's host agent all run this script, so there is one definition of how a seat launches. The script allocates the tmux terminal and the process lifecycle; the seat's own Claudiverse client (the claudiverse-seat mod) does the mirroring and takes input. Before the launch the script makes sure the seat will not stop at a dialog nobody answers (see "No dialog at start" below). It also still sets `CLAUDIVERSE_SKIP_TRUST=1`, which only a patched Claude Code binary reads; stock Claude Code and the claudiverse-seat mod ignore it.
 
 ## How it works
 
@@ -29,6 +29,17 @@ sequenceDiagram
     S-->>C: "cv-spawn: spawned 'TITLE'" (exit 0)
 ```
 
+### No dialog at start
+
+Stock Claude Code stops at "Quick safety check: … trust this folder?" (with "No, exit" selected) in a folder it has not been told to trust, and at its first-run setup (choose a theme) when its global config has no `theme` or `hasCompletedOnboarding`. A seat in tmux would wait there with nobody to answer. Two runner workers did, for 35 minutes, on 2026-10-13. So before it creates the session, `cv-spawn.sh` runs `cv-trust.mjs <working dir>` with the seat's `CLAUDE_CONFIG_DIR`:
+
+- The config is the one Claude Code reads: `<CLAUDE_CONFIG_DIR>/.claude.json` with `--config-dir`, else `~/.claude.json` (a legacy `<config home>/.config.json` first, as Claude Code does).
+- The folder counts as trusted when its key, or any folder above it, has `hasTrustDialogAccepted`. The key is the one Claude Code's own dialog writes: the repository's root, for a worktree the main repository's root, else the folder itself.
+- If it is not trusted, or setup is not done, it takes Claude Code's own lock (`<file>.lock`, a folder; one untouched for 30 s is stale), re-reads the file under it, adds only `projects[<key>].hasTrustDialogAccepted`, `theme` (`dark`, if none) and `hasCompletedOnboarding`, and replaces the file in one rename (mode 600). A running seat's write is not lost.
+- If it cannot (no `node`, an unreadable config, the lock held for 15 s), nothing is started: exit 1.
+
+Checked against Claude Code 2.1.296: with no config the seat stops at the theme picker; with setup done but the folder untrusted, at the trust dialog; after `cv-trust.mjs`, at its prompt.
+
 ### The token
 
 The bearer token is resolved in this order:
@@ -43,7 +54,15 @@ The script does not lease a pool account. The seat leases its own account at sta
 
 ### The environment the seat gets
 
-The launch line is `cd <dir> && VAR=... VAR=... <claude> <flags>`. The variables, in order, are set only when the condition holds:
+No secret is typed into the pane. The line typed is
+
+```text
+cd <dir> && ( . <env file> && rm -f <env file> && VAR=... VAR=... exec <claude> <flags> ); rm -f <prompt file>
+```
+
+The env file holds the secrets as `export NAME=<value>` lines: `CLAUDIVERSE_TOKEN`, `ANTHROPIC_CUSTOM_HEADERS` (pooled: it carries the token) and every `--carry-env` variable. It is made just before the line is typed, mode 600, in `${TMPDIR:-/tmp}/cv-env` (mode 700). The subshell sources it, deletes it, and becomes claude (`exec`), so the pane's scrollback, every `capture-pane` and the shell's history (`~/.zsh_history`) see only the file's name, and the pane's shell never holds a value. If the launch does not start, `cv-spawn.sh` deletes the file itself. Until 2026-10-14 the values were typed inline: a pane capture kept for a runner incident held a seat token, and so does the history of every shell that ran a seat.
+
+The variables on the typed line, in order, are set only when the condition holds:
 
 | Variable | Set when | Value |
 |---|---|---|
@@ -54,13 +73,14 @@ The launch line is `cd <dir> && VAR=... VAR=... <claude> <flags>`. The variables
 | `CLAUDIVERSE_PROFILE_REVISION` | `--revision` | the revision number |
 | `CLAUDIVERSE_HOST` | `--host` | the machine name |
 | `CLAUDIVERSE_DEBUG` | `--debug` | `1` |
-| `ANTHROPIC_BASE_URL` and `ANTHROPIC_CUSTOM_HEADERS` | pooled (`--pooled`, `--pool-only`, `CV_SPAWN_POOLED`) | see [Pooled seats](#pooled-seats) |
+| `ANTHROPIC_BASE_URL` | pooled (`--pooled`, `--pool-only`, `CV_SPAWN_POOLED`) | see [Pooled seats](#pooled-seats); `ANTHROPIC_CUSTOM_HEADERS` is in the env file |
 | `CLAUDE_CONFIG_DIR` and `DISABLE_AUTOUPDATER` | `--config-dir` | the folder, and `1` |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `--oauth-token-file` | `"$(cat <file>)"`, expanded by the seat's shell |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `--pool-only` | `cv-pool` |
 | `CLAUDIVERSE_SKIP_TRUST` | always | `1` |
 | `CLAUDIVERSE_URL` | always | the server URL |
-| `CLAUDIVERSE_TOKEN` | always | the token |
+
+In the env file: `CLAUDIVERSE_TOKEN` (always), `ANTHROPIC_CUSTOM_HEADERS` (pooled), and each `--carry-env NAME` with its value from `cv-spawn.sh`'s environment.
 
 After the binary path, these flags are appended in this order: one `--mcp-config <file>` per `--mcp`; `--add-dir <prompt folder>` (only with a prompt); `--permission-mode <mode>`; `--name <title>` (only if the binary's `--help` output contains `--name <name>`, so Claude Code's own session name matches the seat title); `--model` and `--effort` (only if given); `--resume <uuid>` (only if given); and finally the prompt argument.
 
@@ -226,6 +246,8 @@ cv-spawn: spawned '<title>'
 | `cv-spawn: cannot create <dir>` / `cannot create prompt file` / `cannot copy F` | 1 | The prompt folder under `${TMPDIR:-/tmp}` is not writable. |
 | `cv-spawn: shell in 'T' never became ready (20s)` | 1 | The session's shell did not answer; the session is killed. Check the machine's login shell start-up. |
 | `cv-spawn: 'T' still at a shell prompt 30s after launch — the command did not start.` | 1 | The launch line did not run. The pane is left alive: `tmux attach -t T` and read the shell's error. |
+| `cv-spawn: node is needed to trust D before the launch` | 1 | Install Node.js on the machine. |
+| `cv-trust: cannot make D start without a dialog: …`, then `cv-spawn: not starting T: it would wait at Claude Code's trust or first-run dialog` | 1 | The reason follows `cv-trust:` (an unreadable `.claude.json`, its lock held for 15 s). Fix it, or trust the folder by running `claude` there once. |
 
 All validation errors occur before the tmux session is created, except the last two.
 
@@ -243,4 +265,5 @@ All validation errors occur before the tmux session is created, except the last 
 ## Source
 
 - `agent/tools/cv-spawn.sh`
-- `agent/tools/test/spawn.test.mjs`
+- `agent/tools/cv-trust.mjs`, `agent/tools/test/trust.test.mjs`
+- `agent/tools/test/spawn.test.mjs`, `agent/tools/test/spawn-tmux.test.mjs` (a real tmux, on a private server)

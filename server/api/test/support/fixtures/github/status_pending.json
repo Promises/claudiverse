@@ -1,0 +1,2 @@
+{"state": "pending", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "total_count": 1,
+ "statuses": [{"state": "pending", "context": "ci/build", "description": "Build is running"}]}

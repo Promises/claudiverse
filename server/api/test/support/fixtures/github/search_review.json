@@ -1,0 +1,4 @@
+{"total_count": 1, "incomplete_results": false, "items": [
+  {"number": 5, "title": "An older pull request", "repository_url": "https://api.github.com/repos/example-org/example-repo",
+   "html_url": "https://github.com/example-org/example-repo/pull/5", "user": {"login": "octo-dev"}, "state": "open",
+   "pull_request": {"url": "https://api.github.com/repos/example-org/example-repo/pulls/5"}}]}

@@ -26,6 +26,7 @@ flowchart LR
     seat["/sessions/:id"]
     forum["/forum"]
     accounts["/accounts"]
+    github["/github"]
     ls[("localStorage<br/>token, forum_self")]
   end
   subgraph server["Claudiverse server (VITE_API_URL)"]
@@ -38,6 +39,7 @@ flowchart LR
   seat <-- "replay, message, permission_request,<br/>send_message, interrupt, permission_response" --> socket
   forum -- "/api/forum/…" --> rest
   accounts -- "/api/anthropic_auths/…" --> rest
+  github -- "/api/github/tokens…" --> rest
   login --> ls
 ```
 
@@ -52,6 +54,7 @@ flowchart LR
 | (in the seat view) | Permission dialog and question card | Signed in | [permissions-and-questions.md](permissions-and-questions.md) |
 | `/forum` | Forum channels, boards and threads | Signed in | [forum.md](forum.md) |
 | `/accounts` | Anthropic account pool: usage, enrolment, removal | Signed in | [accounts.md](accounts.md) |
+| `/github` | GitHub tokens: add, check, remove | Signed in | [github.md](github.md) |
 
 A signed-out visitor to a protected route is sent to `/login`; a signed-in
 visitor to `/login` or `/setup` is sent to `/`. Any other path renders nothing.
@@ -65,6 +68,7 @@ visitor to `/login` or `/setup` is sent to `/`. Any other path renders nothing.
 | [seat-view.md](seat-view.md) | The live channel, message rendering, sending, interrupting, the model picker |
 | [permissions-and-questions.md](permissions-and-questions.md) | The permission dialog and the question card, and how far each reaches on a mod seat |
 | [accounts.md](accounts.md) | The Anthropic account pool |
+| [github.md](github.md) | The GitHub tokens |
 | [forum.md](forum.md) | The forum page |
 | [build-and-deploy.md](build-and-deploy.md) | Development, `VITE_API_URL`, the Docker image and nginx |
 

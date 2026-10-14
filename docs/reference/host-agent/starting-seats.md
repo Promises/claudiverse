@@ -271,7 +271,7 @@ The agent logs `spawn <title> in <dir> (mode <mode>)` or `resume <id> as <title>
 | `not_found` | No transcript for resume | `nothing to resume: conversation <id> does not exist here (a seat that never had a turn has none)` |
 | `not_permitted` | The OS holds the folder (macOS privacy prompt), no answer in 5 s | `this machine did not let the agent read <path> within 5 s ...` |
 | `limit` | Too soon | `at most one spawn per <min_interval_s> s` |
-| `limit` | Cap reached | `this machine already runs <n> app-started seats (max <max_seats>)` |
+| `limit` | Cap reached | `would exceed max_seats (<max_seats>): this machine already runs <n> app-started seats` |
 | `spawn_failed` | cv-spawn exited nonzero | The last 3 lines of its stderr (or stdout), up to 500 characters |
 | `spawn_failed` | claude exited quickly | `<title> exited within 5 s of starting` |
 | `error` | Anything else unexpected, e.g. `.claude.json` unreadable | `cannot read <file> to trust <dir>: <reason>` for that case; also logged as `error in <op>:` |
@@ -282,7 +282,7 @@ The agent logs `spawn <title> in <dir> (mode <mode>)` or `resume <id> as <title>
 - **A profile is refused with `runtime ... is not configured here`.** The profile names a runtime this machine's `runtimes` lacks, or its `bin` is not absolute. The app lists what the machine offers from the join payload; fix the config and the agent re-joins.
 - **`not in this machine's MCP catalog`.** Add the server to the catalog file. The agent notices the change and re-joins; no restart needed.
 - **`at most one spawn per 10 s`.** Wait, or lower `min_interval_s`. Failed attempts count too.
-- **`this machine already runs N app-started seats`.** Stop a seat or raise `max_seats`. Seats you started by hand are not counted.
+- **`would exceed max_seats (N)`.** Stop a seat or raise `max_seats`. Seats you started by hand are not counted. A restart (`restart_seat`) counts the seat it replaces out; one the agent did not start (by hand, or before the agent's own restart) needs a free place, and a restart that has none is refused before anything is stopped.
 - **`nothing to resume`.** The conversation is not in the config dir the seat would use. A seat that never took a turn has none. For a runtime with its own `config_dir`, the conversation must be in that folder, not `~/.claude`. For a profile that should tolerate this, use `resume_policy` `latest`.
 - **`<title> exited within 5 s of starting`.** The binary started and stopped: a conversation it cannot load, a bad flag, a login problem. Run the cv-spawn command by hand from a terminal to see the error. The tmux session has already been removed.
 - **`spawn_failed` with a cv-spawn message.** Examples from the script: `tmux session '<title>' already exists`, `--config-dir is not a folder: <D>`, `--oauth-token-file is missing or empty: <F>`, `--pool-only and --oauth-token-file are two different logins; give one`, `no token` (neither `$CLAUDIVERSE_TOKEN`, `--token` nor a token in `--mcp`), or `shell in '<title>' never became ready (20s)`.

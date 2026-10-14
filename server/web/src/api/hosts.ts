@@ -7,6 +7,8 @@ export interface HostSpawn {
   pool_only: boolean;
   /** Whether its seats use the pool when nothing is asked. */
   pooled: boolean;
+  /** The Claude Code version a new seat there runs (0.14+), or null. */
+  version?: string | null;
 }
 
 export interface Host {

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { listFolders, spawnSeat, type Host } from "../api/hosts";
 import {
-  MODELS,
+  modelOptions,
   defaultTitle,
   folderChoices,
   formProblem,
@@ -9,6 +9,10 @@ import {
   spawnRequest,
   type StartSeatForm,
 } from "../lib/startSeat";
+import { useModels } from "../hooks/useModels";
+import { useAuth } from "../contexts/AuthContext";
+import { hasAppPowers, isAppOnlyError } from "../lib/appOnly";
+import FreshSignIn from "./FreshSignIn";
 import styles from "./StartSeat.module.css";
 
 export interface StartedSpawn {
@@ -40,8 +44,12 @@ export default function StartSeat({ hosts, initialHost, onClose, onStarted }: Pr
   const [subfolders, setSubfolders] = useState<Record<string, string[]>>({});
   const [form, setForm] = useState<StartSeatForm>({ path: "", title: "", mode: "auto", model: "", pooled: true });
   const [titleEdited, setTitleEdited] = useState(false);
+  const models = useModels();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Starting a seat is app-only: an older sign-in is told how to get one.
+  const { scope } = useAuth();
+  const appOnly = !hasAppPowers(scope) || isAppOnlyError(error);
 
   // The machine's folders: each root and its subfolders, read from the machine.
   const roots = host?.roots;
@@ -166,7 +174,7 @@ export default function StartSeat({ hosts, initialHost, onClose, onStarted }: Pr
             onChange={(e) => setForm({ ...form, model: e.target.value })}
             disabled={!offers.includes("model")}
           >
-            {MODELS.map((m) => (
+            {modelOptions(models, host?.spawn?.version).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
@@ -194,14 +202,18 @@ export default function StartSeat({ hosts, initialHost, onClose, onStarted }: Pr
         </p>
       )}
       {problem && <p className={styles.problem}>{problem}</p>}
-      {error && (
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
+      {appOnly ? (
+        <FreshSignIn />
+      ) : (
+        error && (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        )
       )}
 
       <div className={styles.actions}>
-        <button type="submit" className={styles.primaryBtn} disabled={busy || !!problem}>
+        <button type="submit" className={styles.primaryBtn} disabled={busy || !!problem || appOnly}>
           {busy ? "Starting…" : "Start the seat"}
         </button>
         <button type="button" className={styles.secondaryBtn} onClick={onClose}>

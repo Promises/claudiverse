@@ -1,0 +1,6 @@
+[
+  {"id": 801, "user": {"login": "reviewer-a", "type": "User"}, "body": "REVIEW-BODY-SHOULD-NOT-APPEAR", "state": "CHANGES_REQUESTED",
+   "html_url": "https://github.com/example-org/example-repo/pull/12#pullrequestreview-801", "submitted_at": "2026-10-13T09:30:00Z"},
+  {"id": 802, "user": {"login": "reviewer-a", "type": "User"}, "body": "", "state": "APPROVED",
+   "html_url": "https://github.com/example-org/example-repo/pull/12#pullrequestreview-802", "submitted_at": "2026-10-13T10:01:45Z"}
+]

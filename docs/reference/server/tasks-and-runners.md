@@ -150,13 +150,13 @@ If the request carries `held_task_id` and it differs from the task id, the serve
 |---|---|
 | `starved_lanes` | Each lane in `live_lanes` that has zero `READY` tasks in the fleet. Not checked against the fleet's existing lanes: a lane you name that has no tasks at all counts as starved. |
 | `stranded` | Tasks in the fleet in `CLAIMED` or `RUNNING` whose `claimed_by` is not in `live_workers`. |
-| `stalled` | `RUNNING` tasks in the fleet with no `PROGRESS`, `STARTED` or `CLAIMED` event newer than `stall_minutes` (default 45), or with no such event at all. Since `STARTED` is never written, a task's silence is measured from its last `PROGRESS` or its claim. |
+| `stalled` | `RUNNING` tasks in the fleet with no `PROGRESS`, `STARTED` or `CLAIMED` event newer than `stall_minutes` (default 45), or with no such event at all. Since `STARTED` is never written, a task's silence is measured from its last `PROGRESS` or its claim. A runner's escalation (a `PROGRESS` whose detail starts `**RUNNER `) does not count: it says nothing is happening. |
 
 `stalled` samples silence, so it is advisory. A slow task that is genuinely working (a long build) also goes quiet. Confirm with another signal before reaping.
 
 ### Completion reporting to notifications
 
-The server does not push task events to the notification router. There is no `tasks:<lane>` report source in the server code: no PubSub broadcast, no channel event and no Router call is made from the task code. Consumers poll `GET /api/tasks`, `GET /api/tasks/:id` and `POST /api/tasks/health`. Completion pings come from the client side: the orchestrator's `cv_task_done` tool calls `POST /api/notify/report` with `self` set to `tasks:<lane>` after completing a task ([notifications.md](notifications.md)). (`TaskEvent.alert_kinds/0` lists `STRANDED STARVED STALLED DRIFTED` as conditions meant to be notified, but nothing calls it.)
+A task's DONE is announced by the server itself, as the transition happens: `Tasks.complete` sends a report from source `tasks:<lane>` (`Router.report/2`), `DONE task #<id> (<worker>): <outcome, one line, cut to 160> — cv_task_show <id>`, to every seat watching that title ([notifications.md](notifications.md)). The complete response says so: `"announced": "tasks:<lane>"`. Until 2026-10-14 the worker's `cv_task_done` sent it, and only with `CV_TASK_REPORT=notify` in its config; #2167's DONE pinged nobody that way. Other task events are not pushed: consumers poll `GET /api/tasks`, `GET /api/tasks/:id` and `POST /api/tasks/health`. (`TaskEvent.alert_kinds/0` lists `STRANDED STARVED STALLED DRIFTED` as conditions meant to be notified, but nothing calls it.)
 
 ### Task flow
 
@@ -188,7 +188,9 @@ The runner claims with `worker` set to its slot name (for example `lorem-w1`), n
 
 ## Runners
 
-`ClaudiverseServer.Runners` is a GenServer, started under the supervision tree, holding a registry of runner slots. It is in memory only. A server restart forgets all slots until each runner's next heartbeat (runners beat at least every 30 seconds).
+`ClaudiverseServer.Runners` is a GenServer, started under the supervision tree, holding a registry of runner slots in memory. A server restart forgets all slots until each runner's next heartbeat (runners beat at least every 30 seconds).
+
+Each heartbeat is also kept as the slot's row in `runner_slots` (`Runners.Slot`): its fleet, state, host and lane, `last_seen_at`, and `beating_since`, when its current run of beats began (a gap longer than `runner_missing_after_ms` starts a new run). So whether a slot was alive through a window can be answered afterwards: it was if `beating_since` is before the window and `last_seen_at` after it. A runner that closes cleanly leaves its row with state `stopped`. A failed write is logged and never costs the heartbeat.
 
 A runner posts a heartbeat on every change of state, seat or task, and every 30 seconds regardless. A runner started without a fleet does not beat and does not appear.
 
@@ -331,7 +333,7 @@ curl -X POST https://claudiverse.example/api/tasks/health \
 
 Response: `{"ok": true}`. Failures: 400 `{"error": "<message>"}` for any validation failure, for example `slot must be 1-64 of A-Z a-z 0-9 . _ -`. Unknown fields are ignored. `since` is not interpreted; the runner sets it to when the slot last changed state.
 
-`GET /api/fleets` returns the caller's fleets, sorted by name. A fleet appears if it has a runner slot, a running seat, or a profile that declares it.
+`GET /api/fleets` returns the caller's fleets, sorted by name. A fleet appears if it has a runner slot, a running seat, a profile that declares it, or it is paused. Each has `paused`: a bulk restart of idle seats leaves a paused fleet out by default. `PATCH /api/fleets/:fleet {"paused": true|false}` sets it (app or super token; 400 for a bad name or a non-boolean).
 
 ```json
 {

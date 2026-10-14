@@ -62,6 +62,7 @@ The join payload is built fresh on every connect:
 | `modes` | Permission modes this machine allows for profile starts: the config key `modes` filtered to `default`, `acceptEdits`, `plan`, `auto`, or all four when `modes` is unset. |
 | `runtimes` | A list of `{name, version}` for each entry of the config key `runtimes` that has an absolute `bin`; `version` is `null` when not configured. |
 | `mcp` | The names in the MCP catalog file (`mcp_catalog`, default `~/.config/claudiverse/mcp-catalog.json`, key `mcpServers`) that are valid names. |
+| `spawn` | 0.13.0+: what a plain spawn may ask for here, `{options, pool_only, pooled}` (`options` within `model`, `pooled`); 0.14.0+ also `runtime` and `version`, the spawn runtime a plain or restarted seat gets and the Claude Code build it pins. |
 | `live_seats` | 0.12.0+: the tmux sessions with a Claude Code process in their pane (the pane's process or its child has a session record in a configured config folder), read at this join. No tmux server, as after a reboot, is `[]`. Left out when tmux could not say (any other `list-sessions` failure), and the server then changes nothing. |
 
 Example:
@@ -146,6 +147,8 @@ or, for a refusal or error:
 | `stop` | Closes a seat's tmux session. | [Seat control](seat-control.md) |
 | `interrupt` | Presses Escape once in a seat's tmux session. | [Seat control](seat-control.md) |
 | `set_mode` | Switches a running seat's permission mode with Shift+Tab. | [Seat control](seat-control.md) |
+| `restart_plan` | 0.14.0: what restarting an idle seat would do, checked, by names. | [Seat control](seat-control.md) |
+| `restart_seat` | 0.14.0: stops an idle seat cleanly and starts it again on the current runtime; a plain-terminal seat comes back in tmux. | [Seat control](seat-control.md) |
 | `locate_seat` | Finds the running process an adopting profile would stop. | [Adopting a running seat](adopt.md) |
 | `release_seat` | Stops that process so the profile can start. | [Adopting a running seat](adopt.md) |
 | `add_root` | Adds a folder to the whitelist, only if `allow_remote_roots` is true. | [Roots](roots.md) |

@@ -1,0 +1,6 @@
+[
+  {"url": "https://api.github.com/repos/example-org/example-repo/pulls/5", "number": 5, "state": "open", "title": "An older pull request",
+   "user": {"login": "octo-dev"}, "head": {"ref": "parser-fix", "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+   "base": {"ref": "main", "sha": "0000000000000000000000000000000000000000"},
+   "created_at": "2026-10-13T09:00:00Z", "updated_at": "2026-10-13T10:01:30Z"}
+]

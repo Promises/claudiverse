@@ -143,7 +143,7 @@ defmodule ClaudiverseServerWeb.HostController do
         conn |> put_status(:bad_request) |> json(%{error: "prompt must be at most #{@max_prompt} characters"})
 
       not (is_nil(model) or (is_binary(model) and Regex.match?(@model, model))) ->
-        conn |> put_status(:bad_request) |> json(%{error: "model must be a model name, like claude-haiku-4-5 or opus"})
+        conn |> put_status(:bad_request) |> json(%{error: "model must be a model name, like claude-haiku-5-5 or opus"})
 
       not (is_nil(pooled) or is_boolean(pooled)) ->
         conn |> put_status(:bad_request) |> json(%{error: "pooled must be true or false"})

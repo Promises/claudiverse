@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession, tmuxNames } from "../lib/adopt.mjs";
+import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, statStart, tmuxSession, tmuxNames } from "../lib/adopt.mjs";
 
 const CEO = "d7dba841-a246-4186-9c74-da1d8534d610";
 const STALE = "6d9b917b-1779-49d0-b95b-ad36f8a84f8b";
@@ -70,6 +70,12 @@ test("start times compare whitespace-insensitively; a different time is a differ
   assert.ok(sameStart("Sat Oct  3 08:18:54 2026", "Sat Oct 3 08:18:54 2026   "));
   assert.ok(!sameStart("Sat Oct  3 08:18:54 2026", "Sat Oct  3 10:18:54 2026"));
   assert.ok(!sameStart(undefined, "Sat Oct  3 08:18:54 2026"));
+  // Linux: /proc/<pid>/stat's starttime, as a Debian seat's record has it (measured).
+  const stat = "12537 (claude (2.1.292)) S 12536 12537 12537 34816 12537 4194560 31702 0 0 0 389 98 0 0 20 0 11 0 9849387 74503168 52341 18446744073709551615";
+  assert.equal(statStart(stat), "9849387");
+  assert.ok(sameStart("9849387", statStart(stat)));
+  assert.ok(!sameStart("9849388", statStart(stat)));
+  assert.equal(statStart("garbage"), null);
 });
 
 test("tmux session name is the part before the colon", () => {

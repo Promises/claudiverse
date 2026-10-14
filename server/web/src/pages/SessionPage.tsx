@@ -5,45 +5,11 @@ import { useSession } from "../hooks/useSession";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getSession } from "../api/sessions";
 import type { Session } from "../lib/types";
+import { modelChoice, modelLabel } from "../lib/models";
+import { useModels } from "../hooks/useModels";
 import MessageBubble from "../components/MessageBubble";
 import PermissionDialog from "../components/PermissionDialog";
 import styles from "./SessionPage.module.css";
-
-/**
- * What `/model` accepts. Kept as a short list of aliases rather than full ids:
- * the slash command resolves them, and an alias survives a model release where
- * a pinned id would quietly stop matching.
- */
-/**
- * What the switcher offers.
- *
- * `id` is sent verbatim to `/model`, so the [1m] variants are spelled out —
- * they are the 1M-context builds, and dropping the suffix would silently switch
- * the seat to the smaller context window.
- *
- * `match` is what the seat REPORTS, which is not the same string: an assistant
- * message carries "claude-opus-5" with no suffix, so matching on `id` would
- * never resolve and the control would permanently show an unselected raw id.
- */
-const MODEL_CHOICES = [
-  { id: "claude-opus-5[1m]", match: "claude-opus-5", label: "Opus 5 (1M)" },
-  { id: "claude-fable-5.1[1m]", match: "claude-fable-5", label: "Fable 5.1 (1M)" },
-  { id: "sonnet", match: "claude-sonnet", label: "Sonnet" },
-  { id: "haiku", match: "claude-haiku", label: "Haiku" },
-];
-
-/**
- * Resolve the model the seat reports onto one of the choices above.
- *
- * Prefix matching rather than an exact table, so a point release
- * ("claude-opus-5-1") still resolves instead of falling off the list.
- */
-function modelAlias(reported: string | null | undefined): string {
-  if (!reported) return "";
-  const m = reported.toLowerCase();
-  const hit = MODEL_CHOICES.find((c) => m.startsWith(c.match) || m === c.id.toLowerCase());
-  return hit ? hit.id : "";
-}
 
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,6 +48,7 @@ export default function SessionPage() {
   // The model of the seat's latest reply is the one it runs now. The session
   // row is read once, when the page opens, and may predate the seat's first
   // turn (a Haiku seat showed "Sonnet" until a reload).
+  const models = useModels();
   const runningModel = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i] as { type?: string; message?: { model?: string } };
@@ -233,7 +200,7 @@ export default function SessionPage() {
           <select
             id="model-select"
             className={styles.select}
-            value={modelAlias(runningModel)}
+            value={modelChoice(runningModel, models)}
             disabled={!connected}
             onChange={(e) => {
               const id = e.target.value;
@@ -244,14 +211,30 @@ export default function SessionPage() {
                 snapping the control to something the seat is not running. */}
             {/* An id we cannot map is SHOWN, not hidden — the control must not
                 claim a model the seat is not running. */}
-            {!modelAlias(runningModel) && (
+            {!modelChoice(runningModel, models) && (
               <option value="">{runningModel || "Unknown until it replies"}</option>
             )}
-            {MODEL_CHOICES.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
+            <optgroup label="Models">
+              {models.models.filter((m) => !m.older).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {modelLabel(m)}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Earlier models">
+              {models.models.filter((m) => m.older).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {modelLabel(m)}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Aliases">
+              {models.aliases.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
       </footer>

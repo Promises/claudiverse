@@ -80,13 +80,35 @@ Either way the runner logs once, `#<id> is done but <worker>'s handoff is not vi
 
 **Durability gate.** Once the handoff is readable, the runner checks that the worker's commits survive the reap, in `--workdir`:
 
-1. `git rev-parse HEAD`
-2. `git fetch origin --quiet`
-3. `git branch -r --contains <HEAD>`
+1. `git rev-parse --is-inside-work-tree`: if git answers "not a git repository" (a `--workdir` that holds repositories rather than being one), there is nothing to check. The runner logs `workdir <dir> is not a git repo; commit check skipped`, and does not escalate.
+2. `git rev-parse HEAD`
+3. `git fetch origin --quiet`
+4. Only commits made since the spawn can be the worker's: just before the spawn the runner records what HEAD and every local branch pointed at (`refsAt`). HEAD's commits that none of those reach are the new ones (`git log HEAD --not <those>`); a new commit that no remote has (`git rev-list HEAD --not <those> --remotes`) is at risk. No new commits at all: the log says `no commits since the spawn (HEAD <sha8> was there before the task)`, and nothing is escalated. So a branch that is local and unpushed on purpose (as a public repository's private branch may be) raises nothing for a worker that made no commits. Measured 2026-10-14: every wc3-sim reap reported its branch's own HEAD as `NOT PUSHED`.
+5. Only the worker's own new commits count. The runner starts every worker with a Claude Code session id of its own choosing (`--session-id`, passed through cv-spawn's `--claude-arg`), so it knows the worker's transcript: `<config>/projects/<folder>/<session id>.jsonl`, and its subagents' under `<session id>/subagents/`. `<config>` is `CV_SPAWN_CONFIG_DIR`, else `CLAUDE_CONFIG_DIR`, else `~/.claude`. In the transcript the runner looks for Bash calls that can make a commit (`git` with any global options, then `commit`, `merge`, `cherry-pick`, `rebase`, `am`, `revert` or `pull`). A new commit is the worker's when one of those calls printed its sha (as `git commit` prints `[main 1a2b3c4] …`), or when its committer date falls within that call, give or take 2 s. Every other new commit was made by someone else in a shared checkout: the log says `HEAD moved during the task, but not by <worker> (a shared checkout); not escalated:` and lists them. Measured 2026-10-14: standalone-bob committed on main in wc3-real's workdir during #2166 and #2169, and both reaps alarmed for workers that had made no commits.
 
-The result is `durable: true` (HEAD is on some remote branch), `durable: false` (on no remote branch), or `durable: null` (a git command failed; treated as unknown, never as safe). For anything other than true, the runner writes a local ref `refs/rescue/<worker>` pointing at HEAD with `git update-ref`, logs a warning, and escalates with the reason and the ref name. If the ref write fails the escalation says so and tells the operator to recover HEAD by hand. The gate never blocks the reap: the worker is already finished and will never push, so waiting could not succeed. A worktree shares its parent's object store, so the commit itself stays; the ref only protects it from being lost when the slot reuses or deletes the branch.
+What the runner does then:
 
-To publish a rescued commit, an operator can push the ref to a real branch, for example:
+| Finding | Log | Rescue ref | Escalation |
+|---|---|---|---|
+| No new commits of the worker's at risk (none made, or all on a remote) | `#<id>: <reason>` | No | No |
+| The worker's own commits are on no remote | `⚠️ … commits are NOT PUSHED (…)` | At its newest one | `reaped, but its commits were NOT PUSHED: <n> commit(s) of its own on no remote: <sha8 subject; …>. …` |
+| `--commits local`, and the worker's own commits are on no remote (its charter has it commit and never push) | `#<id>: <n> commit(s) of its own, unpushed as its charter says: … — preserved at <ref> (<sha8>); not escalated (--commits local).` | At its newest one | No. If the rescue ref cannot be written, it escalates as `NOT PUSHED`. Unattributed commits (no transcript) still escalate. |
+| `--commits forbidden`, and the worker made commits, pushed or not | `⛔ #<id>: CHARTER VIOLATION — …` | At its newest one | `reaped, but CHARTER VIOLATION: <worker> it made <n> commit(s) in a lane whose charter forbids commits: <sha8 subject; …>. …` |
+| The transcript is not found (for example, the runner restarted after the spawn) | `⚠️ … NOT PUSHED (…)` | At the newest unpushed one | Every new unpushed commit alarms, `whose they are is unknown`. Never a charter violation: authorship is not known. |
+| A git command failed | `⚠️ … UNVERIFIABLE (…)` | At HEAD | `… its commits were UNVERIFIABLE: <reason>` |
+
+A workdir with no `refsAt` record (it was not a repository at the spawn) falls back to the older check, `git branch -r --contains <HEAD>`: HEAD on no remote branch alarms.
+
+If the ref write fails, the escalation says so and tells the operator to recover the commit by hand. The gate never blocks the reap: the worker is already finished and will never push, so waiting could not succeed. A worktree shares its parent's object store, so the commit itself stays; the ref only protects it from being lost when the slot reuses or deletes the branch.
+
+Limits of the attribution:
+
+- A commit made by a script the worker ran (`./land.sh`) whose output does not show the sha, outside a recognised git call, is taken as someone else's.
+- A commit someone else makes in the same seconds as one of the worker's git calls (in any repository) is taken as the worker's.
+- If the worker runs `/clear`, Claude Code starts a new session id, and calls after it are not read.
+- Only HEAD's history is checked. Commits the worker left on another branch, after switching back, are not seen.
+
+The runner never pushes: whether a rescued commit belongs on a remote is a human's call. Check where that remote points first, as it may be public. To publish one, push the ref to a real branch, for example:
 
 ```bash
 git -C <workdir> push origin refs/rescue/lorem-w1-t123:refs/heads/lorem-w1-t123
@@ -124,7 +146,7 @@ An unreadable handoff is not a decline; it is no information. On a decline the r
 - Tasks path: `POST /api/tasks/:id/release` with `{worker: <slot>, reason: "declined by <worker>: <why>"}` (reason truncated to 500 characters). The task goes RELEASED, then READY.
 - Forum path: owner set to `""` (`POST /api/forum/posts/:id/assign`) and status set back to `incoming`.
 
-If the release fails, the worker is kept, a line `DECLINED #<id> but the release FAILED — worker kept, retrying.` is logged once, and the runner retries on the next decline poll. If it succeeds, the task id is added to the slot's `blocked` set, the durability check runs (a rescue ref is written for non-durable commits, and mentioned in the escalation), the session is killed, and an escalation records that the slot will not claim the task again but another slot in the lane can. The block lasts for the lifetime of the runner process. If every slot in a lane declines a task, nobody will take it and it needs re-routing by a human.
+If the release fails, the worker is kept, a line `DECLINED #<id> but the release FAILED — worker kept, retrying.` is logged once, and the runner retries on the next decline poll. If it succeeds, the task id is added to the slot's `blocked` set, the durability check runs as below (what it finds is added to the escalation), the session is killed, and an escalation records that the slot will not claim the task again but another slot in the lane can. The block lasts for the lifetime of the runner process. If every slot in a lane declines a task, nobody will take it and it needs re-routing by a human.
 
 ### Process gone
 
@@ -196,7 +218,7 @@ Endpoints the runner calls for claiming and reaping:
 | `--task-source tasks requires --fleet`, exit 2 | Missing `--fleet`. | Add `--fleet`. |
 | `server handed back #<id>, which this slot declined — it ignored exclude` | Server older than the `exclude` support. | Deploy the server; until then the slot releases the task repeatedly. |
 | `is done but ...handoff is not visible yet` / `UNREADABLE` | The worker has not written a handoff, or the read failed. | Usually clears itself. After `--handoff-grace` s an escalation is recorded; the runner keeps polling. Check the worker's handoff by hand. |
-| Escalation: commits `NOT PUSHED` or `UNVERIFIABLE` | HEAD is on no remote branch, or git could not tell. | Push the `refs/rescue/<worker>` ref as shown above. If the escalation says the ref could not be written, recover HEAD by hand. |
+| Escalation: commits `NOT PUSHED` or `UNVERIFIABLE` | The worker made commits since its spawn that are on no remote branch, or git could not tell. Commits someone else made in the same checkout are only logged. | Decide whether they belong on a remote (check that it is not public), then push the `refs/rescue/<worker>` ref as shown above. If the escalation says the ref could not be written, recover HEAD by hand. |
 | `DECLINED #<id> but the release FAILED — worker kept, retrying.` | Release call failed. | Check server and task state; the runner retries. |
 | `<worker> process is GONE but #<id> was never marked done.` | tmux session died. | Inspect the task and the worker's handoff; requeue or complete by hand. |
 | Stall escalation but the worker is busy | Work in a VM or waiting on a background job burns no host CPU. | Attach or capture the pane before acting; nothing was killed. |
@@ -216,5 +238,6 @@ Endpoints the runner calls for claiming and reaping:
 
 ## Source
 
-- `agent/tools/cv-runner.mjs` (`claim`, `claimFromTasks`, `runTask`, `release`, `readDecline`, `releaseDeclined`, `commitsDurable`, `preserveRef`, `cpuSecondsOfTree`, main loop)
+- `agent/tools/cv-runner.mjs` (`claim`, `claimFromTasks`, `runTask`, `release`, `readDecline`, `releaseDeclined`, `cpuSecondsOfTree`, main loop)
+- `agent/tools/cv-reap.mjs` (`commitsDurable`, `preserveRef`), tested in `agent/tools/test/reap.test.mjs` with real git in temporary folders
 - `agent/tools/cv-core.mjs` (`forumClaim`, `forumRead`, `forumSetStatus`, `forumAssign`, `taskClaim`, `taskStart`, `taskShow`, `taskRelease`, `handoffGet`)

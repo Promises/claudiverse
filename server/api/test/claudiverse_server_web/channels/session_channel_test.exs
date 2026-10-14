@@ -74,6 +74,9 @@ defmodule ClaudiverseServerWeb.SessionChannelTest do
     # Register self as sidecar so we receive forwarded messages
     ClaudiverseServer.Sessions.Room.register_sidecar(session.id, self())
 
+    # ...and at its prompt (reject-busy: a seat not known to be idle is not sent to).
+    ClaudiverseServer.Sessions.Room.mirror_messages(session.id, [%{"type" => "idle"}])
+
     {:ok, _reply, observer_socket} = subscribe_and_join(socket, SessionChannel, "session:#{session.id}", %{"role" => "observer"})
 
     push(observer_socket, "send_message", %{"content" => "Hello from web"})

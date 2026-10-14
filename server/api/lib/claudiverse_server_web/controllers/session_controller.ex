@@ -23,7 +23,7 @@ defmodule ClaudiverseServerWeb.SessionController do
       end
 
     json(conn, %{
-      sessions: Enum.map(sessions, &serialize_session/1)
+      sessions: Enum.map(sessions, &serialize_session(&1, protected_profiles(user.id)))
     })
   end
 
@@ -183,8 +183,17 @@ defmodule ClaudiverseServerWeb.SessionController do
     end
   end
 
-  defp serialize_session(s) do
+  # The ids of the user's protected profiles (Restarts), read once per list.
+  defp protected_profiles(user_id) do
+    import Ecto.Query, only: [from: 2]
+    from(p in ClaudiverseServer.Profiles.Profile, where: p.user_id == ^user_id and p.protected, select: p.id)
+    |> ClaudiverseServer.Repo.all()
+    |> MapSet.new()
+  end
+
+  defp serialize_session(s, protected \\ nil) do
     live = live_status(s)
+    protected = protected || protected_profiles(s.user_id)
 
     %{
       id: s.id,
@@ -209,6 +218,8 @@ defmodule ClaudiverseServerWeb.SessionController do
       conversation_id: s.conversation_id,
       # The profile it was started from, if any (the apps link the two).
       profile_id: s.profile_id,
+      # Its profile is protected: a bulk restart leaves it out unless named.
+      protected: s.profile_id != nil and MapSet.member?(protected, s.profile_id),
       client_version: s.client_version,
       inserted_at: s.inserted_at,
       # When the session last DID something, from its newest message. The list

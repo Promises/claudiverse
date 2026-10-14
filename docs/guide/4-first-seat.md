@@ -32,7 +32,7 @@ small Haiku model, allowed to edit files without asking:
 ```sh
 ID=$(jq -n --arg machine "$(hostname)" --arg folder "$HOME/projects/hello" \
         '{name: "hello", machine: $machine, folder: $folder,
-          model: "claude-haiku-4-5", permission_mode: "acceptEdits"}' \
+          model: "claude-haiku-5-5", permission_mode: "acceptEdits"}' \
   | curl -s "$SERVER/api/profiles" -H "authorization: Bearer $SUPER" \
          -H 'content-type: application/json' -d @- | jq -r '.profile.id')
 echo "$ID"

@@ -4,11 +4,17 @@ import type { Host } from "../api/hosts";
 import StartSeat from "./StartSeat";
 import Machines from "./Machines";
 
+// The sign-in's scope: "app" unless a test makes it an older one.
+const auth = vi.hoisted(() => ({ scope: "app" as string | null, logout: vi.fn() }));
+vi.mock("../contexts/AuthContext", () => ({ useAuth: () => auth }));
 vi.mock("../api/hosts", () => ({
   listFolders: vi.fn(async (_host: string, path: string) => ({ path, parent: "", dirs: ["app", "site"], truncated: false })),
   spawnSeat: vi.fn(async () => ({ spawn_id: "sp-1" })),
 }));
 const api = await import("../api/hosts");
+// The server's model list: offline unless a test gives one (the built-in list then).
+vi.mock("../api/models", () => ({ getModels: vi.fn(async () => { throw new Error("offline"); }) }));
+const modelsApi = await import("../api/models");
 
 const machine = (name: string, extra: Partial<Host> = {}): Host => ({
   name, online: true, seats: 0, roots: ["/home/me/projects"], version: "0.13.0", modes: [],
@@ -23,6 +29,7 @@ const hosts = [
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  auth.scope = "app";
 });
 
 describe("Start a seat", () => {
@@ -46,6 +53,44 @@ describe("Start a seat", () => {
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith({ spawnId: "sp-1", host: "box", title: "app" }));
     expect(api.spawnSeat).toHaveBeenCalledWith("box",
       { path: "/home/me/projects/app", title: "app", mode: "auto", model: "haiku", pooled: true });
+  });
+
+  test("the models are the server's list: a model it adds is offered by its exact id", async () => {
+    vi.mocked(modelsApi.getModels).mockResolvedValueOnce({
+      models: [{ id: "claude-lorem-6", label: "Lorem 6", family: "lorem", one_m: true, accepts_1m_suffix: false, since: null, older: false }],
+      aliases: [{ id: "opus", label: "Opus (latest)" }],
+    });
+    render(<StartSeat hosts={hosts} onClose={() => {}} onStarted={() => {}} />);
+    await screen.findByRole("option", { name: "Lorem 6 (1M)" });
+    const ids = [...(screen.getByLabelText("Model") as HTMLSelectElement).options].map((o) => o.value);
+    expect(ids).toEqual(["", "claude-lorem-6", "opus"]);
+  });
+
+  test("a model the machine's Claude Code does not know yet is not offered (Haiku 5.5 came in 2.1.293)", () => {
+    const at = (version: string) => {
+      cleanup();
+      render(<StartSeat hosts={[machine("box", { spawn: { options: ["model"], pool_only: false, pooled: false, version } })]}
+        onClose={() => {}} onStarted={() => {}} />);
+      return [...(screen.getByLabelText("Model") as HTMLSelectElement).options].map((o) => o.value);
+    };
+    expect(at("2.1.292")).not.toContain("claude-haiku-5-5");
+    expect(at("2.1.296")).toContain("claude-haiku-5-5");
+  });
+
+  test("a sign-in that cannot start seats is told to sign in again, not shown the server's refusal", async () => {
+    auth.scope = "api";
+    render(<StartSeat hosts={hosts} onClose={() => {}} onStarted={() => {}} />);
+    expect(screen.getByText(/needs a fresh sign-in/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Start the seat" }) as HTMLButtonElement).disabled).toBe(true);
+
+    auth.scope = "app";
+    cleanup();
+    vi.mocked(api.spawnSeat).mockRejectedValueOnce(new Error("spawning seats is app-only"));
+    render(<StartSeat hosts={hosts} onClose={() => {}} onStarted={() => {}} />);
+    await screen.findByRole("option", { name: "/home/me/projects/app" });
+    fireEvent.click(screen.getByRole("button", { name: "Start the seat" }));
+    expect(await screen.findByText(/needs a fresh sign-in/)).toBeTruthy();
+    expect(screen.queryByText("spawning seats is app-only")).toBeNull();
   });
 
   test("an older machine's agent: no model or pool to choose, and the form says how to get them", async () => {

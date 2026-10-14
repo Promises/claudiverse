@@ -1,10 +1,10 @@
 # Seat control
 
-Seat control is the part of the host agent that acts on a seat that is already running on this machine: it can close the seat (`stop`), press Escape in it (`interrupt`), and switch its permission mode (`set_mode`). A background mode sweep also reads every Claude Code seat's permission mode and reports changes to the server. All of this works through tmux: the agent addresses a seat's tmux session by name, sends it keys, and reads its screen. It exists so the apps can steer seats whose Claude Code process offers no remote handler for these actions.
+Seat control is the part of the host agent that acts on a seat that is already running on this machine: it can close the seat (`stop`), press Escape in it (`interrupt`), switch its permission mode (`set_mode`), and restart an idle seat on the machine's current Claude Code runtime (`restart_seat`, previewed with `restart_plan`), which also adopts a seat running in a plain terminal into tmux. A background mode sweep also reads every Claude Code seat's permission mode and reports changes to the server. All of this works through tmux: the agent addresses a seat's tmux session by name, sends it keys, and reads its screen. It exists so the apps can steer seats whose Claude Code process offers no remote handler for these actions.
 
 ## How it works
 
-The server sends a `request` on the agent's `host:<name>` channel (see [channel.md](channel.md)) with an `op` of `stop`, `interrupt` or `set_mode`. The agent answers with a `reply` carrying either `ok: true` and a result, or `ok: false` with a `code` and an `error` sentence.
+The server sends a `request` on the agent's `host:<name>` channel (see [channel.md](channel.md)) with an `op` of `stop`, `interrupt`, `set_mode`, `restart_plan` or `restart_seat`. The agent answers with a `reply` carrying either `ok: true` and a result, or `ok: false` with a `code` and an `error` sentence.
 
 ### The shared check: `seatInRoots`
 
@@ -87,6 +87,32 @@ Only titles whose mode differs from the last report are sent, in one message, an
 
 The sweep does not apply the roots check: it reports any tmux session on the machine that runs a Claude Code process.
 
+### restart_seat and restart_plan (0.14.0; 0.14.1 checks every start condition before the stop)
+
+`restart_seat` stops an idle seat cleanly and starts it again: the same conversation (`--resume`), the same folder and title, with what its process was started with, on the machine's current spawn runtime. Picking up a new Claude Code build or mod is the point. A seat in a plain terminal (not under tmux) comes back in a tmux session this agent runs: adopted, so from then on it is an ordinary seat. `restart_plan` makes every check and builds the same plan without stopping anything (the server's dry run).
+
+The seat is found by its conversation id (`session_id`, or `conversation_id`) in the session records of the configured config folders, never by its name. Its pid must still be the process the record was written for (its start time), its folder inside the roots, and it must not be a cv-runner's worker. Its conversation's transcript must be in the config folder it will run with, or a resume would start a new conversation: then it is refused.
+
+**Never stopped unless it can start again.** Every check a start makes is made before the stop, in the plan (so a dry run shows it too): the transcript, `max_seats`, its title free in tmux (its own session aside, which the stop closes), `cv-spawn.sh` present, its runtime's binary present and runnable; for a profile's seat, the profile's own checks. A restart replaces a seat, so the seat being restarted is counted out of `max_seats`; a seat this agent did not start (by hand, or before the agent's own restart) takes a free place, and with none it is refused: `would exceed max_seats (N): this machine already runs M app-started seats`. A bulk restart asks for each seat in turn, so each is checked against the count the restarts before it left. In a dry run nothing has been restarted yet, so the server passes `taking`, the places the seats planned before it on this machine would take, and each plan says `takes_place` (true when this agent did not start the seat, so restarting it takes a new place).
+
+Idle, strictly, by the seat's own record and screen:
+
+- status `idle`, unchanged for 60 s (`statusUpdatedAt`); for a seat in a plain terminal 300 s, because text typed but not sent in its prompt cannot be seen;
+- in tmux, no dialog open (`dialogOpen`), and nothing typed in its prompt. The prompt line is the `❯` line between the input box's rules; the empty prompt's placeholder ("Try …") is drawn dim, so anything not dim is typed text (measured on 2.1.292). A pane whose prompt is not in view (a menu) is refused.
+
+`restart_seat` re-reads the record and the pane right before the stop. Then:
+
+1. **Stop.** In tmux, `/exit` and Enter go to the seat's pane (the mod sends `session_ended`). In a plain terminal, SIGTERM to that one pid. It waits up to 20 s for the process to exit; after that SIGTERM (in tmux) or SIGKILL, and the result says it was killed. The tmux session, if a shell outlives claude in it, is closed so the title is free.
+2. **Start.** A profile's seat (the server sends its `start_profile` args) through `start_profile`, resuming this conversation. Any other seat through `cv-spawn.sh`, rebuilt from its process, read exactly (`/proc/<pid>/cmdline` and `environ` on Linux; `KERN_PROCARGS2` through `lib/procargs.py` on macOS, which needs `python3`; `ps` joins arguments with spaces, so it is not used):
+   - `--model`, `--effort` and the permission mode as passed (or the mode the server says the seat is in now, when that differs, which the result names);
+   - every `--mcp-config`;
+   - every other option verbatim (`--add-dir`, `--plugin-dir`, `--append-system-prompt`, `--settings`, `--agents`, options this agent does not know), through `cv-spawn.sh --claude-arg`;
+   - its config folder (`CLAUDE_CONFIG_DIR`, else the folder its record is in), its pooling (the server's proxy URL and pool token in its environment become `--pooled` or `--pool-only`), a login token from the spawn runtime's token file when it is the same token, and its `CLAUDE_CODE_*` and `CLAUDIVERSE_*` variables except those `cv-spawn.sh` sets fresh, through `--carry-env` (values from the environment, never a command line).
+   - Dropped, and listed: `--name`, `--resume`/`--continue`/`--session-id` (it resumes by id), `--dangerously-skip-permissions`, a mode outside the four, a first prompt given on the command line, a login token from no file the agent knows. `--print` is refused.
+3. If the start fails after the stop anyway, it is tried once more, 3 s later. If that fails too, the refusal is `not_restarted`: it says the seat was stopped, why it did not start, and the command that brings it back by hand (`cd <folder> && [CLAUDE_CONFIG_DIR=<dir>] <claude> --resume <conversation>`). The server ends the seat's row.
+
+The result: `{title, action: restart|adopt, via: spawn|profile, pid, tmux, old_version, target_version, argv, env, carried, dropped, stopped, killed, session_id, note}`. `argv` and `env` are the NAMES of what the new seat gets, never values. For an adopt, `note` says the old terminal window is left showing the exited claude. A restart is not paced by `min_interval_s`: the server restarts one seat at a time.
+
 ## Configuration
 
 Seat control has no settings of its own. Related values:
@@ -94,7 +120,7 @@ Seat control has no settings of its own. Related values:
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `roots` | none | The whitelist the shared check uses; see [roots.md](roots.md). |
-| `max_seats` | `10` | Counts app-started seats; `stop` frees a slot. |
+| `max_seats` | `10` | Counts the seats this agent process started that still run in tmux (not a runner's workers, not seats started by hand or before the agent's own restart); `stop` frees a slot; a restart counts the seat it replaces out. |
 | `claude_config_dir` | `$CLAUDE_CONFIG_DIR`, else `~/.claude` | Where the session records are read from. Each runtime's `config_dir` is read too. |
 
 Fixed in code: mode sweep interval 10 s, 400 ms between Shift+Tab presses, at most 4 presses, footer read from the last 6 lines, dialog read from the last 25 lines.
@@ -128,6 +154,32 @@ Reply: `{"request_id": "r2", "ok": true, "result": {"title": "lorem-w1"}}`
 ```
 
 Reply: `{"request_id": "r3", "ok": true, "result": {"title": "lorem-w1", "mode": "plan"}}`
+
+### restart_plan, restart_seat
+
+Request: `{"op": "restart_seat", "args": {"session_id": "<uuid>", "conversation_id": null, "title": "lorem-w1", "fleet": "lorem", "mode": "auto", "profile": null}}`. `profile` is a profile's `start_profile` args for a profile's seat, else null. `restart_plan` also takes `taking` (0.14.1), the places earlier seats of a dry run would take under `max_seats`.
+
+Reply (`restart_plan` has the same fields without `stopped`, `killed`, `session_id`, `note`):
+
+```json
+{"request_id": "r4", "ok": true, "result": {"title": "lorem-w1", "action": "restart", "via": "spawn", "pid": 4242, "tmux": true, "takes_place": false,
+  "old_version": "2.1.292", "target_version": "2.1.296", "argv": ["--permission-mode", "--model", "--effort", "--mcp-config", "--resume"],
+  "env": ["CLAUDE_CONFIG_DIR", "ANTHROPIC_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_OAUTH_TOKEN"], "carried": ["--model", "--effort", "--mcp-config"],
+  "dropped": ["--name (the seat's title is set anew)"], "stopped": 4242, "killed": false, "session_id": "<uuid>", "note": null}}
+```
+
+| Code | When |
+| --- | --- |
+| `bad_request` | No `session_id`, or a bad title. |
+| `not_found` | No running process has the conversation; or its transcript is not in the config folder it would run with. |
+| `several` | Several processes have it. |
+| `process_changed` | The pid is not the process its record names any more, or the record went away before the stop. |
+| `runner` | A cv-runner's worker. |
+| `busy` | Not idle long enough, a dialog open, text typed in its prompt, its prompt not in view. |
+| `limit` | It could not start again under `max_seats` (checked before the stop). |
+| `not_allowed` | Its command line cannot be restarted (`--print`). |
+| `error` | Its command line and environment could not be read; `cv-spawn.sh` is missing; it survived SIGKILL (not stopped). |
+| `not_restarted` | It was STOPPED and did not start again, twice; the message has the command to resume it by hand. |
 
 ### Refusals
 
@@ -185,7 +237,8 @@ Sent on the channel when the sweep sees a change:
 
 ## Source
 
-- `cv-host-agent.mjs` (`seatInRoots`, `interruptSeat`, `paneSession`, `sweepModes`, `setMode`, `stopSeat`, the sweep timer)
+- `cv-host-agent.mjs` (`seatInRoots`, `interruptSeat`, `paneSession`, `sweepModes`, `setMode`, `stopSeat`, the sweep timer, `restartPlan`, `restartSeat`, `procLaunch`)
+- `lib/restart.mjs`, `lib/procargs.py`, `test/restart.test.mjs`
 - `lib/mode.mjs`
 - `lib/rules.mjs` (`checkStopTitle`, `resolveInRoots`, `Refusal`)
 - `lib/adopt.mjs` (`sessionRecords`)

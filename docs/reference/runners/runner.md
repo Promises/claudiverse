@@ -66,11 +66,11 @@ flowchart TD
 Summary of the stages:
 
 1. **Drain check.** If `~/.claudiverse/drain/<slot>` exists, the slot claims nothing more and exits. See [runner-halt-and-drain.md](runner-halt-and-drain.md).
-2. **Claim.** The halt check runs first and fails closed: if it errors, the runner does not claim. See [runner-halt-and-drain.md](runner-halt-and-drain.md) and [runner-claim-and-reap.md](runner-claim-and-reap.md).
+2. **Claim.** The halt check runs first and fails closed: if it errors, the runner does not claim, and checks again with a backoff (the poll interval, doubling, at most every 5 minutes) until the server answers; then it logs `server reachable again` and claims resume. See [runner-halt-and-drain.md](runner-halt-and-drain.md) and [runner-claim-and-reap.md](runner-claim-and-reap.md).
 3. **Spawn.** The runner writes the worker brief to a temporary file and runs `cv-spawn.sh` with a 90 s timeout. A failed spawn releases the task; after 3 failures for the same task the slot stops claiming it and escalates. See [runner-brief-and-spawn.md](runner-brief-and-spawn.md).
 4. **Poll.** Every `--poll` ms the runner reads the task's status. It stops waiting only when the task is `done` or `superseded`, the worker has declined, or the tmux session is gone. It never reaps on idleness, elapsed time or silence, and never kills on timeout.
 5. **Reap.** Requires a readable handoff. Unpushed commits are preserved in a local `refs/rescue/<worker>` ref rather than blocking the reap. See [runner-claim-and-reap.md](runner-claim-and-reap.md).
-6. **Continuations.** Parked `CONTINUE #...` replies on the finished task's forum post are promoted to claimable forum posts. This step always uses the forum, on both task sources. See [runner-validation.md](runner-validation.md).
+6. **Continuations.** Parked `CONTINUE #...` replies on a finished forum task are promoted to claimable forum posts, unless the seat went on working after parking one, or it is archived; a promoted reply is archived. A task-table row has no thread, so a tasks-source runner promotes none. See [runner-validation.md](runner-validation.md).
 7. **Validation.** With `--validate`, a follow-up check task is enqueued. See [runner-validation.md](runner-validation.md).
 8. **Loop.** With `--once` the slot exits after one task attempt (successful or not); otherwise it goes round again.
 
@@ -155,6 +155,8 @@ Every flag takes a value unless noted. Argument parsing is positional: the value
 | `--task-source forum\|tasks` | `forum` | Where claimable work comes from (see above). |
 | `--escalate-via forum\|notify` | `forum` | Tasks source only: `forum` posts a top-level alert in the lane channel; `notify` sends a direct ping from source `tasks:<lane>` and posts nothing. Either way the alert is also recorded on the task's event trail. |
 | `--stuck-after <min>` | `30` | Minutes with no CPU consumed across the worker's process tree before a stall is escalated. |
+| `--commits allowed\|forbidden\|local` | `allowed` | `forbidden`: a commit the worker made (its transcript shows it) is escalated at the reap as a `CHARTER VIOLATION`, pushed or not. `local`: the charter has workers commit and never push, so the worker's own unpushed commits are logged and kept on a rescue ref, not escalated. Commits someone else made in the same checkout are only logged either way. Any other value exits with code 2 at startup. See [runner-claim-and-reap.md](runner-claim-and-reap.md). |
+| `--startup-watch <s>` | `300` | Seconds after a spawn during which the worker's pane is looked at, every 10 s, for a dialog of Claude Code's own; one seen twice 15 s apart is escalated at once (see [runner-escalation.md](runner-escalation.md)). `0` turns it off. |
 | `--stuck-hard-after <min>` | `180` | Fallback when the process table cannot be read: minutes elapsed before escalating. |
 | `--cpu-epsilon <s>` | `0.5` | CPU seconds, summed over the worker's process tree since the last sample, that count as "the worker did something". |
 | `--once` | off (boolean) | Exit after one task attempt (even if the spawn failed). |
@@ -181,14 +183,15 @@ The runner exits with code 2, after printing a message to stderr, when:
 
 1. `--task-source` is not `forum` or `tasks`.
 2. `--escalate-via` is not `forum` or `notify`.
-3. `--task-source tasks` is used without `--fleet`.
-4. `--validate-priority` is not an integer.
-5. `--bin` is set and the path is not executable.
-6. `--validate-body` is set and the file cannot be read, or is empty.
-7. `--charter` is set and the file cannot be read, or is empty.
-8. `--slot` or `--workdir` is missing. The runner prints its usage text.
+3. `--commits` is not `allowed`, `forbidden` or `local`.
+4. `--task-source tasks` is used without `--fleet`.
+5. `--validate-priority` is not an integer.
+6. `--bin` is set and the path is not executable.
+7. `--validate-body` is set and the file cannot be read, or is empty.
+8. `--charter` is set and the file cannot be read, or is empty.
+9. `--slot` or `--workdir` is missing. The runner prints its usage text.
 
-The checks run in the order above (1, 2, 3, 4, 5, 6, 7, 8). `--poll`, `--stuck-after`, `--stuck-hard-after`, `--cpu-epsilon`, `--handoff-grace` and `--decline-poll` are converted with `Number(...)` and are not range-checked.
+The checks run in the order above (1 to 9). `--poll`, `--stuck-after`, `--stuck-hard-after`, `--cpu-epsilon`, `--handoff-grace` and `--decline-poll` are converted with `Number(...)` and are not range-checked.
 
 ### Environment read by the runner
 
@@ -200,7 +203,7 @@ The checks run in the order above (1, 2, 3, 4, 5, 6, 7, 8). `--poll`, `--stuck-a
 
 `--mcp` configures the worker, not the runner. The runner reads `CLAUDIVERSE_URL` and `CLAUDIVERSE_TOKEN` from its own shell, so export them before starting it even if the worker's MCP config sets them.
 
-`cv-spawn.sh` reads defaults from the environment that a launcher script may export before starting the runner: `CV_SPAWN_ORIGIN`, `CV_SPAWN_POOLED`, `CV_SPAWN_CONFIG_DIR`, `CV_SPAWN_OAUTH_TOKEN_FILE` and `CV_SPAWN_POOL_ONLY`, as well as `CLAUDIVERSE_BIN` for the binary. The runner itself always passes `--origin runner` and, when set, `--fleet`; flags win over those environment defaults. See [cv-spawn.md](cv-spawn.md) for what each one does.
+`cv-spawn.sh` reads defaults from the environment that a launcher script may export before starting the runner: `CV_SPAWN_ORIGIN`, `CV_SPAWN_POOLED`, `CV_SPAWN_CONFIG_DIR`, `CV_SPAWN_OAUTH_TOKEN_FILE` and `CV_SPAWN_POOL_ONLY`, as well as `CLAUDIVERSE_BIN` for the binary. The runner itself always passes `--origin runner`, `--claude-arg --session-id --claude-arg <uuid>` (a new id per worker, so the reap can read its transcript) and, when set, `--fleet`; flags win over those environment defaults. See [cv-spawn.md](cv-spawn.md) for what each one does.
 
 ## Interface
 
@@ -251,7 +254,10 @@ Keys while running: `a` attaches to the current worker; Ctrl-C closes the slot (
 |---|---|---|
 | Exit code 2 and a message at start | A startup validation failed. | See the list above; fix the flag or file named in the message. |
 | `server ... ⚠️ DEFAULT (CLAUDIVERSE_URL unset)` | `CLAUDIVERSE_URL` is not exported in the runner's shell. `--mcp` does not affect the runner. | Export `CLAUDIVERSE_URL` and `CLAUDIVERSE_TOKEN`, then restart. |
-| `⛔ HALT CHECK FAILED (...) — refusing to claim` | The runner could not read the halt channel. It fails closed. | Check server reachability and the token. The slot resumes when the check succeeds. |
+| `⛔ HALT CHECK FAILED (...) — refusing to claim. … Failure <n> since <time>; next check in <s> s.` | The runner could not read the halt channel. It fails closed and checks again with a backoff (at most every 5 minutes). | Check server reachability and the token. The slot resumes when the check succeeds. |
+| `server reachable again after <n> failed halt check(s) since <time> — claims resume.` | The halt check answers again. | None. |
+| `idle: <n> polls since <time>, last one found nothing to claim.` | Every 30 minutes while idle: the runner is alive. It says `the server unreachable` or `the fleet halted` instead when that is what it found. | None. A pane with no line for more than 30 minutes is a runner that is not polling. |
+| `#<id> is done now (it changed after the list was read) — not claiming it` | A forum post was set done or archived between the list and the claim. | None. |
 | `queue empty — 0 claimable in #<channel>` | No forum post matches the claim filter. A post created without `status=incoming` is invisible to it. | Create tasks with `cv_task_add`, which sets the status. |
 | `queue empty — 0 READY tasks in <fleet>/<lane>` | Tasks source: nothing READY in that fleet and lane. | Check the fleet and lane spelling and that tasks are READY. |
 | `tmux session '<worker>' already exists; refusing to clobber. Releasing claim.` | A tmux session with the worker's name is already running. | Kill or inspect the old session; the task is released and will be claimed again. |

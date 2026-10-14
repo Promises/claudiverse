@@ -77,6 +77,7 @@ flowchart TB
 |---|---|
 | [profiles-and-hosts.md](profiles-and-hosts.md) | Host agents and the `host:<name>` channel, spawn/stop/resume, profiles, rename, adopt |
 | [account-pool.md](account-pool.md) | Anthropic account enrolment, the vault, refresh, the usage poller, cooling, lease and failover |
+| [github.md](github.md) | The operator's GitHub tokens: adding, checking, how they are kept |
 | [api-proxy.md](api-proxy.md) | The `/proxy` relay to the Anthropic API, pooled credentials, the traffic observer |
 | [auto-resume.md](auto-resume.md) | One `continue` for a seat whose turn died on an empty pool or a server restart that cut its stream |
 | [auth.md](auth.md) | Users, token contexts (`api`, `app`, `super`, `host:`), setup-code sign-up, login throttle |
@@ -121,7 +122,7 @@ Every route in `router.ex`, and the page that documents it.
 |---|---|
 | `GET /api/health`, `GET /api/incidents` | [operations.md](operations.md) |
 | `POST /api/auth/login`, `DELETE /api/auth/logout`, `GET /api/me`, `GET/POST /api/setup`, `GET /api/tokens`, `DELETE /api/tokens/:id` | [auth.md](auth.md) |
-| `GET/POST /api/sessions`, `GET/DELETE /api/sessions/:id`, `POST /api/sessions/:id/title`, `POST /api/sessions/:id/permission_mode` | [sessions-and-rooms.md](sessions-and-rooms.md) |
+| `GET/POST /api/sessions`, `GET/DELETE /api/sessions/:id`, `POST /api/sessions/:id/title`, `POST /api/sessions/:id/permission_mode`, `GET /api/models` | [sessions-and-rooms.md](sessions-and-rooms.md) |
 | `POST /api/sessions/:id/mirror`, `GET /api/seats/:seat/inbox`, `GET /api/seats/whoami` | [mirror-inbox-liveness.md](mirror-inbox-liveness.md) |
 | `POST /api/hooks/seat/:seat/pretooluse`, `POST /api/hooks/seat/:seat/permissionrequest`, `POST/GET/DELETE /api/mcp/seat/:seat` | [questions-and-permissions.md](questions-and-permissions.md) |
 | `POST /api/sessions/:id/access`, `POST /api/sessions/:id/notify` | [access-and-notify.md](access-and-notify.md) |
@@ -130,6 +131,7 @@ Every route in `router.ex`, and the page that documents it.
 | `POST /api/sessions/:id/files`, `GET /api/files/:file_id`, `/api/app/builds*` | [app-builds-and-seat-files.md](app-builds-and-seat-files.md) |
 | `/api/hosts*`, `POST /api/sessions/:id/stop`, `POST /api/sessions/:id/resume`, `/api/profiles*`, `/api/sessions/:id/adopt*`, `/api/join_codes`, `/api/join` | [profiles-and-hosts.md](profiles-and-hosts.md) |
 | `/api/anthropic_auths*` | [account-pool.md](account-pool.md) |
+| `/api/github/*` | [github.md](github.md) |
 | `/proxy/*` | [api-proxy.md](api-proxy.md) |
 | `/api/forum/*` | [forum.md](forum.md) |
 | `/api/tasks*`, `POST /api/runners/heartbeat`, `GET /api/fleets` | [tasks-and-runners.md](tasks-and-runners.md) |

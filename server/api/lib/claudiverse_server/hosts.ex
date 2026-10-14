@@ -300,7 +300,7 @@ defmodule ClaudiverseServer.Hosts do
          :ok <- GenServer.call(__MODULE__, {:spawn_slot, {user_id, name}}) do
       spawn_id = Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
 
-      Task.start(fn ->
+      Task.Supervisor.start_child(ClaudiverseServer.Tasks, fn ->
         event =
           case request(user_id, name, op, args, spawn_timeout_ms()) do
             {:ok, result} -> Map.merge(%{"ok" => true, "title" => result["title"], "error" => nil}, on_ok.(result))

@@ -1119,7 +1119,7 @@ defmodule ClaudiverseServer.Sessions.Room do
       %{host: host, title: title} when is_binary(host) and is_binary(title) ->
         sid = state.session_id
 
-        Task.start(fn ->
+        Task.Supervisor.start_child(ClaudiverseServer.Tasks, fn ->
           result = ClaudiverseServer.Hosts.request(owner, host, "interrupt", %{"title" => title})
           Logger.info("[interrupt] session=#{sid} via host #{host}: #{inspect(result)}")
         end)

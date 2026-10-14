@@ -6,8 +6,10 @@
 // Finding the process: Claude Code writes <config dir>/sessions/<pid>.json for
 // every process it runs (pid, sessionId, cwd, procStart, tmux, status), and
 // removes it on exit. The patched binary writes them too (2.1.286, measured).
-// procStart is ps's lstart IN UTC: "Sat Oct  3 08:18:54 2026" for a process
-// `ps -o lstart=` shows as 10:18:54 in Oslo.
+// procStart on macOS is ps's lstart IN UTC: "Sat Oct  3 08:18:54 2026" for a
+// process `ps -o lstart=` shows as 10:18:54 in Oslo. On Linux it is
+// /proc/<pid>/stat's starttime, clock ticks since boot: "9849387" (2.1.292,
+// measured in a Debian container).
 //
 // Matching: by conversation id first. A patched seat's server row can carry a
 // STALE id (ipsum-admin's row said 6d9b917b…, its process d7dba841…), so a seat no
@@ -80,10 +82,18 @@ export function runnerSlots(psArgs) {
 
 export const runnerWorker = (title, slots) => [...slots].some((s) => typeof title === "string" && title.startsWith(`${s}-t`));
 
-// procStart and `TZ=UTC ps -o lstart=` name the same instant: the pid was not
-// reused by another process since the record was written.
+// procStart and the process's start as this platform gives it (processStart in
+// cv-host-agent.mjs) are the same: the pid was not reused by another process
+// since the record was written.
 export const sameStart = (procStart, lstart) =>
   typeof procStart === "string" && typeof lstart === "string" && procStart.trim().replace(/\s+/g, " ") === lstart.trim().replace(/\s+/g, " ");
+
+// A process's start time from the text of /proc/<pid>/stat: field 22,
+// counted after the command name, whose parentheses may hold spaces.
+export function statStart(stat) {
+  const fields = typeof stat === "string" ? stat.slice(stat.lastIndexOf(")") + 2).split(" ") : [];
+  return /^\d+$/.test(fields[19] || "") ? fields[19] : null;
+}
 
 // The tmux session names in `tmux list-sessions -F "#{session_name}"`'s result
 // ({code, stdout, stderr}). No tmux server, as after a reboot, is no sessions;

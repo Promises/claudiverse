@@ -9,6 +9,9 @@ defmodule ClaudiverseServerWeb.OperatorChannel do
 
   `operator:events` — operator-facing events in general:
     "host_spawn"              %{"spawn_id", "host", "title", "ok", "error", "op", ...}
+    "seat_restart"            one seat's restart: started, then restarted |
+                              adopted | skipped | failed (Restarts)
+    "restart_batch"           a bulk restart started, and done with its counts
     "host"                    %{"name", "online", "last_seen_at"}: a machine's
                               agent joined or left; refetch GET /api/hosts
     "runner"                  one runner slot as GET /api/fleets lists it, on
@@ -45,7 +48,7 @@ defmodule ClaudiverseServerWeb.OperatorChannel do
     end
   end
 
-  @events ~w(human_request human_request_resolved host_spawn host runner profile pool)
+  @events ~w(human_request human_request_resolved host_spawn host runner profile pool seat_restart restart_batch)
 
   @impl true
   def handle_info({event, payload}, socket) when event in @events do

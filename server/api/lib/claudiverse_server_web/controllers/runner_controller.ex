@@ -52,13 +52,17 @@ defmodule ClaudiverseServerWeb.RunnerController do
       for p <- Profiles.with_status(user_id, Profiles.list(user_id)), is_binary(p.fleet),
           do: Map.take(p, [:id, :name, :role, :machine, :status, :seat, :fleet])
 
+    paused = ClaudiverseServer.Fleets.paused(user_id)
+
     fleets =
-      (Enum.map(runners, & &1.fleet) ++ Enum.map(seats, & &1.fleet) ++ Enum.map(members, & &1.fleet))
+      (Enum.map(runners, & &1.fleet) ++ Enum.map(seats, & &1.fleet) ++ Enum.map(members, & &1.fleet) ++ MapSet.to_list(paused))
       |> Enum.uniq()
       |> Enum.sort()
       |> Enum.map(fn fleet ->
         %{
           fleet: fleet,
+          # A bulk restart leaves a paused fleet out by default (Restarts).
+          paused: MapSet.member?(paused, fleet),
           runners: for(r <- runners, r.fleet == fleet, do: r),
           seats: for(s <- seats, s.fleet == fleet, do: Map.delete(s, :fleet)),
           members: for(m <- members, m.fleet == fleet, do: Map.delete(m, :fleet))
@@ -66,6 +70,23 @@ defmodule ClaudiverseServerWeb.RunnerController do
       end)
 
     json(conn, %{fleets: fleets})
+  end
+
+  @doc "PATCH /api/fleets/:fleet {paused}: app or super token. 200 {fleet, paused}."
+  def update_fleet(conn, %{"fleet" => fleet} = params) do
+    cond do
+      not ClaudiverseServer.Accounts.app_powers?(conn.assigns[:token_context]) ->
+        conn |> put_status(:forbidden) |> json(%{error: "pausing a fleet is app-only"})
+
+      not is_boolean(params["paused"]) ->
+        conn |> put_status(:bad_request) |> json(%{error: "paused must be true or false"})
+
+      ClaudiverseServer.Fleets.set_paused(conn.assigns.current_user.id, fleet, params["paused"]) == :ok ->
+        json(conn, %{fleet: fleet, paused: params["paused"]})
+
+      true ->
+        conn |> put_status(:bad_request) |> json(%{error: "fleet must be 1-64 of A-Z a-z 0-9 . _ -"})
+    end
   end
 
   defp validate(p) do

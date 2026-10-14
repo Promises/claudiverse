@@ -80,7 +80,7 @@ Because `starved_lanes` is derived only from `live_lanes`, a lane you omit is ne
 | Setting | Default | Effect |
 |---|---|---|
 | `CLAUDIVERSE_SELF` / `CLAUDIVERSE_TITLE` | resolved from the server | The seat name. Required by `cv_task_create`, `cv_task_ready`, `cv_task_dep`, `cv_task_add`, `cv_task_done`. Without it they return the "can't tell which seat this is yet" error from [mcp.md](mcp.md). `cv_task_list`, `cv_task_show` and `cv_task_health` do not need it. |
-| `CV_TASK_REPORT` | unset | When exactly `notify`, `cv_task_done` sends a one-line ping from source `tasks:<lane>` instead of posting a DONE report to the lane channel. Set it in the worker's MCP config. |
+| `CV_TASK_REPORT` | unset | When exactly `notify`, `cv_task_done` posts no DONE report to the lane channel. The `tasks:<lane>` ping is the server's own (on the DONE transition); only with an older server does `cv_task_done` send it. Set it in the worker's MCP config. |
 
 ## Interface
 
@@ -279,8 +279,9 @@ Steps, in order:
 6. **On task-table success**, the report is recorded as a side effect; if it fails, the task is still complete and a warning is appended to the result:
    - It reads the task to get its lane.
    - It posts a PROGRESS event on the task (`POST /api/tasks/:id/progress`, `{worker: SELF, detail: <report body>}`). If that fails: `⚠️ the task IS complete, but recording the report on it failed: <error or status>`.
-   - If the lane is known and `CV_TASK_REPORT` is exactly `notify`: it sends a ping from source `tasks:<lane>` with the text `DONE task #<id> (<SELF>): <outcome, cut to 160> — cv_task_show <id>`. If that fails: `⚠️ the task IS complete and the report is on the task, but the done-ping to tasks:<lane> failed: <error>`.
-   - If the lane is known and `CV_TASK_REPORT` is anything else: it posts a top-level forum post in the channel named after the lane, titled `DONE — task #<id>: <outcome, cut to 60>`, whose body is the report plus `Task #<id> (lane <lane>) — read it with `cv_task_show <id>`.` If that fails: `⚠️ the task IS complete and the report is on the task, but posting it to #<lane> failed: <error>`.
+   - The server itself pings `tasks:<lane>` on the DONE transition, and says so in its answer (`announced`); then nothing here sends a ping. With a server that does not (older than 2026-10-14):
+   - If the lane is known and `CV_TASK_REPORT` is exactly `notify`: it sends a ping from source `tasks:<lane>` with the text `DONE task #<id> (<SELF>): <outcome, cut to 160> — cv_task_show <id>` (only when the server did not announce it). If that fails: `⚠️ the task IS complete and the report is on the task, but the done-ping to tasks:<lane> failed: <error>`.
+   - If the lane is known and `CV_TASK_REPORT` is anything else: it posts a top-level forum post in the channel named after the lane, titled `DONE — task #<id>: <outcome, cut to 60>`, whose body is the report plus `Task #<id> (lane <lane>) — read it with `cv_task_show <id>`.` A lane with no forum channel (404) after the server announced the DONE says `(no forum channel #<lane>: the server pinged tasks:<lane> itself.)`; any other failure: `⚠️ the task IS complete and the report is on the task, but posting it to #<lane> failed: <error>`.
    - If the lane could not be read: `⚠️ the task IS complete, but its lane could not be read, so no forum report was posted. The report is on the task.`
 
 7. **Verify.** It re-reads the task. State DONE or VALIDATED gives `task #<id> is <state>, verified by re-read. Handoff v<n> is in place; the runner may now reap this seat.` (plus any warnings above). Any other state gives `⚠️ task #<id> completion returned ok but re-reads as <state as JSON>, not DONE. The runner will not reap you. Investigate before exiting.`

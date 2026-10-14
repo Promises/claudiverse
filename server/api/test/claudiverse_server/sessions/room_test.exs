@@ -122,10 +122,15 @@ defmodule ClaudiverseServer.Sessions.RoomTest do
     assert_receive {:forward_to_sidecar, "remote_permission_response", %{"request_id" => "perm-2", "decision" => "allow"}}, 1000
   end
 
-  test "send_message forwards to sidecar", %{session: session} do
+  test "send_message forwards to sidecar once the seat is idle; before that it is busy", %{session: session} do
     Room.register_sidecar(session.id, self())
-    Room.send_message(session.id, "Hello from observer")
+    # Reject-busy: a seat that has not said it is at its prompt is not sent to.
+    assert {:busy, _} = Room.send_message(session.id, "too early")
+    refute_received {:forward_to_sidecar, "remote_input", _}
 
+    # A real seat says so with an idle frame.
+    Room.mirror_messages(session.id, [%{"type" => "idle"}])
+    assert :delivered = Room.send_message(session.id, "Hello from observer")
     assert_receive {:forward_to_sidecar, "remote_input", %{"content" => "Hello from observer"}}, 1000
   end
 

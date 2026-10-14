@@ -4,10 +4,14 @@
 # in a detached tmux session, mirrored to the claudiverse server and driveable
 # via cv_send / cv_tail / cv_status.
 #
-# Hands-off: sets CLAUDIVERSE_SKIP_TRUST=1 (patch 011) so the instance boots
-# straight to the REPL with NO first-run "trust this folder?" gate, and NO edit
-# to the shared global ~/.claude.json. The interactive sidecar (patch 002) does
-# the mirror+drive; this script just allocates the tmux PTY + process lifecycle.
+# Hands-off: before the launch, cv-trust.mjs trusts the folder and marks Claude
+# Code's first-run setup done in the seat's global config (CLAUDE_CONFIG_DIR's
+# .claude.json, else ~/.claude.json), under Claude Code's own lock, so the
+# instance boots straight to the REPL with no dialog waiting; if it cannot,
+# nothing is started. (CLAUDIVERSE_SKIP_TRUST=1, still set, is a patched
+# build's switch: stock Claude Code ignores it.) The mod or the patched
+# sidecar mirrors and drives; this script allocates the tmux PTY and the
+# process lifecycle.
 #
 # This is the canonical spawn primitive: cv-runner and each machine's host agent
 # (agent/host, "New seat" in the app) run THIS script, so
@@ -77,9 +81,12 @@
 # Notes:
 #  - 'auto' mode is the recommended default for unattended spawns: it runs the
 #    permission-classifier guardrail (auto-approves safe ops, gates risky ones).
-#  - The token is passed as an env var on the launch line (same as the rest of
-#    the fleet) — visible via `ps`/the tmux pane. Acceptable for a trusted host;
-#    harden later (temp env file) if needed.
+#  - NO SECRET IS TYPED INTO THE PANE. The seat token, the pool headers (which
+#    carry it) and every --carry-env value go into a 0600 file in a 0700 folder;
+#    the line typed sources it in a subshell, deletes it, and execs claude. The
+#    pane's scrollback, every capture-pane and the pane's own shell never see a
+#    value. (They used to be typed inline: a runner's stall evidence, a pane
+#    capture, held a seat token in clear text, 2026-10-14.)
 #  - Initial --prompt is passed as a positional arg to the interactive REPL. If a
 #    given build doesn't honor that, inject it via cv_send after the instance
 #    reports idle instead.
@@ -114,6 +121,12 @@ POOL_ONLY="${CV_SPAWN_POOL_ONLY:-}"
 CONFIG_DIR="${CV_SPAWN_CONFIG_DIR:-}"
 OAUTH_FILE="${CV_SPAWN_OAUTH_TOKEN_FILE:-}"
 MCPS=()
+# A restart (the host agent's restart_seat) passes on what the old claude was
+# started with: options this script does not model, verbatim (--claude-arg,
+# one argument each), and environment variables by NAME (--carry-env), their
+# values taken from this script's own environment, never a command line.
+CLAUDE_ARGS=()
+CARRY_ENV=()
 
 if [ $# -lt 1 ]; then
   echo "usage: cv-spawn.sh <working_dir> [--title T] [--mcp CFG] [--mode MODE] [--prompt ... | --prompt-file F] [--token TOK] [--url URL] [--bin PATH]" >&2
@@ -144,6 +157,10 @@ while [ $# -gt 0 ]; do
     --token)  TOKEN="$2"; shift 2;;
     --url)    URL="$2"; shift 2;;
     --bin)    CLAUDE_BIN="$2"; shift 2;;
+    --claude-arg) CLAUDE_ARGS+=("$2"); shift 2;;
+    --carry-env)
+      printf '%s' "$2" | grep -Eq '^[A-Z_][A-Z0-9_]*$' || { echo "cv-spawn: --carry-env needs a variable name, got: $2" >&2; exit 2; }
+      CARRY_ENV+=("$2"); shift 2;;
     *) echo "cv-spawn: unknown arg: $1" >&2; exit 2;;
   esac
 done
@@ -184,6 +201,15 @@ fi
 # external pre-lease remains possible if something ever needs one.
 
 [ -z "$CONFIG_DIR" ] || [ -d "$CONFIG_DIR" ] || { echo "cv-spawn: --config-dir is not a folder: $CONFIG_DIR" >&2; exit 2; }
+
+# No seat starts at a dialog nobody answers. MEASURED 2026-10-13: two runner
+# workers sat 35 min at "trust this folder?" (2.1.296 ignores
+# CLAUDIVERSE_SKIP_TRUST). cv-trust.mjs trusts the folder as Claude Code's own
+# dialog would and marks first-run setup done, in the config this seat reads.
+CV_SPAWN_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+command -v node >/dev/null || { echo "cv-spawn: node is needed to trust $WORKDIR_ABS before the launch" >&2; exit 1; }
+CLAUDE_CONFIG_DIR="${CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-}}" node "$CV_SPAWN_HERE/cv-trust.mjs" "$WORKDIR_ABS" \
+  || { echo "cv-spawn: not starting ${TITLE:-the seat}: it would wait at Claude Code's trust or first-run dialog" >&2; exit 1; }
 [ -z "$OAUTH_FILE" ] || [ -s "$OAUTH_FILE" ] || { echo "cv-spawn: --oauth-token-file is missing or empty: $OAUTH_FILE" >&2; exit 2; }
 [ -z "$POOLED" ] || [ "$POOLED" = 1 ] || { echo "cv-spawn: CV_SPAWN_POOLED must be 1 or unset" >&2; exit 2; }
 [ -z "$POOL_ONLY" ] || [ "$POOL_ONLY" = 1 ] || { echo "cv-spawn: CV_SPAWN_POOL_ONLY must be 1 or unset" >&2; exit 2; }
@@ -202,12 +228,18 @@ done
 POOL_ENV=""
 if [ -n "$POOLED" ]; then
   HDRS="X-Claudiverse-Token: $TOKEN"$'\n'"X-Claudiverse-Pool: 1"$'\n'"X-Claudiverse-Observe: off"
-  POOL_ENV="ANTHROPIC_BASE_URL=$(printf %q "${URL%/}/proxy/seat/$TITLE") ANTHROPIC_CUSTOM_HEADERS=$(printf %q "$HDRS") "
+  POOL_ENV="ANTHROPIC_BASE_URL=$(printf %q "${URL%/}/proxy/seat/$TITLE") "
 fi
 
-# Build the launch command (quoted so paths/prompts with spaces survive).
-LAUNCH="cd $(printf %q "$WORKDIR_ABS") && \
-CLAUDIVERSE_TITLE=$(printf %q "$TITLE") \
+# The secrets, for the env file (never the typed line): the seat token, the
+# pool headers that carry it, and each carried variable (whatever it holds).
+SECRETS="export CLAUDIVERSE_TOKEN=$(printf %q "$TOKEN")"$'\n'
+[ -z "$POOLED" ] || SECRETS+="export ANTHROPIC_CUSTOM_HEADERS=$(printf %q "$HDRS")"$'\n'
+for n in ${CARRY_ENV[@]+"${CARRY_ENV[@]}"}; do SECRETS+="export $n=$(printf %q "${!n-}")"$'\n'; done
+
+# Build the command (quoted so paths/prompts with spaces survive). It runs in a
+# subshell that has sourced the env file (see LAUNCH below).
+CMD="CLAUDIVERSE_TITLE=$(printf %q "$TITLE") \
 CLAUDIVERSE_ORIGIN=$(printf %q "$ORIGIN") \
 ${FLEET:+CLAUDIVERSE_FLEET=$(printf %q "$FLEET") }\
 ${PROFILE:+CLAUDIVERSE_PROFILE=$PROFILE CLAUDIVERSE_TMUX=$(printf %q "$TITLE") }\
@@ -220,26 +252,26 @@ ${OAUTH_FILE:+CLAUDE_CODE_OAUTH_TOKEN=\"\$(cat $(printf %q "$OAUTH_FILE"))\" }\
 ${POOL_ONLY:+CLAUDE_CODE_OAUTH_TOKEN=cv-pool }\
 CLAUDIVERSE_SKIP_TRUST=1 \
 CLAUDIVERSE_URL=$(printf %q "$URL") \
-CLAUDIVERSE_TOKEN=$(printf %q "$TOKEN") \
-$(printf %q "$CLAUDE_BIN")"
+exec $(printf %q "$CLAUDE_BIN")"
 for cfg in ${MCPS[@]+"${MCPS[@]}"}; do
-  LAUNCH="$LAUNCH --mcp-config $(printf %q "$cfg")"
+  CMD="$CMD --mcp-config $(printf %q "$cfg")"
 done
-LAUNCH="$LAUNCH --permission-mode $(printf %q "$MODE")"
+CMD="$CMD --permission-mode $(printf %q "$MODE")"
 # Claude Code's own name for the session (its /resume picker, terminal title,
 # Remote Control) is the seat's title too; without --name it derives one from
 # the folder ("standalone-carol-49" for the seat standalone-carol). A binary
 # without the flag is launched as before.
-"$CLAUDE_BIN" --help 2>/dev/null | grep -q -- '--name <name>' && LAUNCH="$LAUNCH --name $(printf %q "$TITLE")"
+"$CLAUDE_BIN" --help 2>/dev/null | grep -q -- '--name <name>' && CMD="$CMD --name $(printf %q "$TITLE")"
 # --model is APPENDED ONLY IF ASKED FOR. An empty MODEL must not emit `--model ""`,
 # which the binary would read as an explicit empty model rather than as "unset".
-[ -n "$MODEL" ] && LAUNCH="$LAUNCH --model $(printf %q "$MODEL")"
-[ -n "$EFFORT" ] && LAUNCH="$LAUNCH --effort $(printf %q "$EFFORT")"
+[ -n "$MODEL" ] && CMD="$CMD --model $(printf %q "$MODEL")"
+[ -n "$EFFORT" ] && CMD="$CMD --effort $(printf %q "$EFFORT")"
+for a in ${CLAUDE_ARGS[@]+"${CLAUDE_ARGS[@]}"}; do CMD="$CMD $(printf %q "$a")"; done
 # A session uuid only: it reaches the shell line, so nothing else is let through.
 if [ -n "$RESUME" ]; then
   printf '%s' "$RESUME" | grep -Eq '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' \
     || { echo "cv-spawn: --resume needs a session uuid, got: $RESUME" >&2; exit 2; }
-  LAUNCH="$LAUNCH --resume $(printf %q "$RESUME")"
+  CMD="$CMD --resume $(printf %q "$RESUME")"
 fi
 
 # THE PROMPT GOES VIA A FILE, NEVER INLINE ON THE COMMAND LINE.
@@ -292,8 +324,8 @@ if [ -n "$PROMPT" ] || [ -n "$PROMPT_FROM" ]; then
   # --add-dir takes several folders and would swallow the prompt after it as
   # one more (measured: the seat started with no prompt), so it goes in front
   # of an option that ends its list.
-  LAUNCH="${LAUNCH/ --permission-mode / --add-dir $(printf %q "$PROMPT_DIR") --permission-mode }"
-  LAUNCH="$LAUNCH $(printf %q "Your instructions are in @$PROMPT_FILE - read all of it and follow it."); rm -f $(printf %q "$PROMPT_FILE")"
+  CMD="${CMD/ --permission-mode / --add-dir $(printf %q "$PROMPT_DIR") --permission-mode }"
+  CMD="$CMD $(printf %q "Your instructions are in @$PROMPT_FILE - read all of it and follow it.")"
 fi
 
 # Spawn detached, sized for a sane Ink REPL.
@@ -327,6 +359,17 @@ for _ in $(seq 1 100); do
 done
 [ "$ready" = 1 ] || { echo "cv-spawn: shell in '$TITLE' never became ready (20s)" >&2; tmux kill-session -t "$TITLE" 2>/dev/null; exit 1; }
 
+# The secrets, in a file only this user can read, in a folder only this user
+# can open. The typed line names the file, sources it in a subshell, deletes
+# it, and execs claude there; the pane's shell never holds a value. The prompt
+# file goes once claude exits.
+ENV_DIR="${TMPDIR:-/tmp}/cv-env"
+mkdir -p -m 700 "$ENV_DIR" && chmod 700 "$ENV_DIR" || { echo "cv-spawn: cannot create $ENV_DIR" >&2; tmux kill-session -t "$TITLE" 2>/dev/null; exit 1; }
+ENV_FILE="$(umask 077 && mktemp "$ENV_DIR/cv-env-XXXXXX")" || { echo "cv-spawn: cannot create an env file in $ENV_DIR" >&2; tmux kill-session -t "$TITLE" 2>/dev/null; exit 1; }
+printf '%s' "$SECRETS" > "$ENV_FILE"
+LAUNCH="cd $(printf %q "$WORKDIR_ABS") && ( . $(printf %q "$ENV_FILE") && rm -f $(printf %q "$ENV_FILE") && $CMD )"
+[ -z "$PROMPT_FILE" ] || LAUNCH="$LAUNCH; rm -f $(printf %q "$PROMPT_FILE")"
+
 tmux send-keys -t "$TITLE" "$LAUNCH" Enter
 
 # VERIFY THE LAUNCH ACTUALLY HAPPENED. Until now this script printed "spawned"
@@ -342,6 +385,8 @@ for _ in $(seq 1 60); do
     *) launched=1; break;;
   esac
 done
+# Sourced and deleted by the pane once claude started; gone either way.
+rm -f "$ENV_FILE"
 if [ "$launched" != 1 ]; then
   echo "cv-spawn: '$TITLE' still at a shell prompt 30s after launch — the command did not start." >&2
   echo "cv-spawn: pane left ALIVE for inspection: tmux attach -t $TITLE" >&2

@@ -6,6 +6,7 @@ import DashboardPage from "./pages/DashboardPage";
 import SessionPage from "./pages/SessionPage";
 import ForumPage from "./pages/ForumPage";
 import AccountsPage from "./pages/AccountsPage";
+import GitHubPage from "./pages/GitHubPage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -57,6 +58,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ForumPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/github"
+        element={
+          <ProtectedRoute>
+            <GitHubPage />
           </ProtectedRoute>
         }
       />

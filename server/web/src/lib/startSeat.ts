@@ -1,4 +1,5 @@
 import type { Host, SpawnRequest } from "../api/hosts";
+import { knownTo, modelLabel, type ModelList } from "./models";
 
 /** A seat's name: what tmux and the server accept. */
 export const TITLE = /^[A-Za-z0-9._-]{1,64}$/;
@@ -11,13 +12,17 @@ export const MODES = [
   { id: "plan", label: "Plan only" },
 ];
 
-/** Aliases Claude Code resolves; "" leaves the machine's Claude Code to choose. */
-export const MODELS = [
-  { id: "", label: "The machine's default" },
-  { id: "opus", label: "Opus" },
-  { id: "sonnet", label: "Sonnet" },
-  { id: "haiku", label: "Haiku" },
-];
+/**
+ * "" leaves the machine's Claude Code to choose; then each current model its
+ * Claude Code knows (`version`, the machine's spawn.version), then the aliases.
+ */
+export function modelOptions(list: ModelList, version?: string | null): { id: string; label: string }[] {
+  return [
+    { id: "", label: "The machine's default" },
+    ...list.models.filter((m) => !m.older && knownTo(m, version)).map((m) => ({ id: m.id, label: modelLabel(m) })),
+    ...list.aliases.filter((a) => a.id !== "default"),
+  ];
+}
 
 /** A name from a folder, as the host agent makes one: unsafe runs become "-". */
 export function defaultTitle(path: string): string {

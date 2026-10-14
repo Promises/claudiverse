@@ -39,12 +39,13 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { createRelay } from "./lib/relay.mjs";
 import { CYCLE, footerMode, dialogOpen } from "./lib/mode.mjs";
-import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, tmuxSession, tmuxNames } from "./lib/adopt.mjs";
+import { sessionRecords, matchSeat, runnerSlots, runnerWorker, sameStart, statStart, tmuxSession, tmuxNames } from "./lib/adopt.mjs";
+import { idleProblem, unsentPrompt, readClaudeArgv, readClaudeEnv, rebuildArgs, capProblem, resumeCommand } from "./lib/restart.mjs";
 import { realRoots, listDirs, resolveInRoots, checkSpawn, checkResume, checkStopTitle, findTranscript, addRoot, removeRoot, Refusal,
          machineChoices, checkProfile, mcpConfigFor, isTrusted, trustKey, withTrust, setupDone, withSetupDone, spawnRuntime,
          spawnChoices, spawnFlags } from "./lib/rules.mjs";
 
-const VERSION = "0.13.0";
+const VERSION = "0.14.1";
 const CONFIG_PATH = process.env.CLAUDIVERSE_HOST_AGENT_CONFIG || path.join(os.homedir(), ".config/claudiverse/host-agent.json");
 
 function log(...a) {
@@ -198,7 +199,13 @@ async function ensureTrusted(dir, claudeJson = cfg.claude_json) {
   if (!trusted) log(`trusted ${key}${root ? ` (the git root of ${dir})` : ""} in ${claudeJson}`);
 }
 
-async function startProfile(args) {
+async function startProfile(args, opts) {
+  return launchProfile(await profileLaunch(args), opts);
+}
+
+// A profile's start, checked and worked out but not done (nothing written):
+// a restart checks it before it stops the seat.
+async function profileLaunch(args) {
   const catalog = readCatalog();
   const p = await checkProfile(args, roots, cfg, catalog);
 
@@ -222,16 +229,20 @@ async function startProfile(args) {
   else if (p.pooled) argv.push("--pooled");
   if (p.configDir) argv.push("--config-dir", p.configDir);
   if (p.oauthTokenFile) argv.push("--oauth-token-file", p.oauthTokenFile);
-  if (p.mcp.length) {
+  const mcpFile = p.mcp.length ? path.join(cfg.profile_dir, `${p.name}.mcp.json`) : null;
+  if (mcpFile) argv.push("--mcp", mcpFile);
+  return { p, argv, sessionId, configDir, mcpFile, mcpBody: mcpFile ? JSON.stringify(mcpConfigFor(catalog, p.mcp), null, 2) + "\n" : null };
+}
+
+async function launchProfile({ p, argv, sessionId, configDir, mcpFile, mcpBody }, { paced = true, replacing = null } = {}) {
+  if (mcpFile) {
     fs.mkdirSync(cfg.profile_dir, { recursive: true, mode: 0o700 });
-    const file = path.join(cfg.profile_dir, `${p.name}.mcp.json`);
-    writeAtomic(file, JSON.stringify(mcpConfigFor(catalog, p.mcp), null, 2) + "\n", 0o600);
-    argv.push("--mcp", file);
+    writeAtomic(mcpFile, mcpBody, 0o600);
   }
   await ensureTrusted(p.dir, p.configDir ? path.join(p.configDir, ".claude.json") : cfg.claude_json);
 
   log(`profile ${p.name} r${p.revision}: ${p.runtime}${p.poolOnly ? ", pool only" : p.pooled ? ", pooled" : ""}, mcp [${p.mcp.join(", ")}]`);
-  return startSeat({ dir: p.dir, title: p.name, mode: p.mode, sessionId, bin: p.bin, extra: argv, configDir });
+  return startSeat({ dir: p.dir, title: p.name, mode: p.mode, sessionId, bin: p.bin, extra: argv, configDir, paced, replacing });
 }
 
 // The app's New seat and resume: on `spawn_runtime` when the machine names
@@ -249,19 +260,39 @@ async function startPlain(seat) {
   return startSeat({ ...seat, bin: rt.bin, extra: argv, configDir: rt.configDir || cfg.claude_config_dir });
 }
 
+// Everything a start needs, checked without starting. A restart checks it
+// BEFORE it stops the seat (`replacing`, counted out of the cap; `freeing`,
+// its own tmux session, which the stop closes), so a seat that cannot start
+// again is never stopped. max_seats counts the seats THIS agent process
+// started (spawn, resume, a profile, a restart) that still run in tmux: not a
+// runner's workers, not seats started by hand, and not seats it started
+// before it was itself restarted.
+async function startPreflight({ title, dir, sessionId, configDir = cfg.claude_config_dir, bin = null, paced = true, replacing = null, freeing = null, taking = 0 }) {
+  if (sessionId && !findTranscript(configDir, dir, sessionId))
+    throw new Refusal("not_found", `nothing to resume: conversation ${sessionId} does not exist here (a seat that never had a turn has none)`);
+  // A restart is not a new seat: it is not paced (the server runs a bulk
+  // restart one seat at a time, each waiting for the last).
+  if (paced && Date.now() - lastSpawnAt < cfg.min_interval_s * 1000) throw new Refusal("limit", `at most one spawn per ${cfg.min_interval_s} s`);
+  for (const t of spawned) if (!(await tmuxHas(t))) spawned.delete(t);
+  const cap = capProblem(spawned, replacing, cfg.max_seats, taking);
+  if (cap) throw new Refusal("limit", cap);
+  if (title !== freeing && (await tmuxHas(title))) throw new Refusal("bad_request", `a seat named ${title} already runs here`);
+  if (!fs.existsSync(cfg.cv_spawn)) throw new Refusal("error", `cv-spawn is not at ${cfg.cv_spawn}`);
+  if (bin && path.isAbsolute(bin)) {
+    try {
+      fs.accessSync(bin, fs.constants.X_OK);
+    } catch {
+      throw new Refusal("not_found", `its Claude Code binary ${bin} is not there, or cannot run`);
+    }
+  }
+}
+
 // spawn, resume and start_profile share everything but the checks and the
 // cv-spawn flags. A profile brings its own binary and flags (`bin`, `extra`)
 // in place of the machine's spawn defaults.
-async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, flags = [], configDir = cfg.claude_config_dir }) {
-  if (sessionId && !findTranscript(configDir, dir, sessionId))
-    throw new Refusal("not_found", `nothing to resume: conversation ${sessionId} does not exist here (a seat that never had a turn has none)`);
-
-  const now = Date.now();
-  if (now - lastSpawnAt < cfg.min_interval_s * 1000) throw new Refusal("limit", `at most one spawn per ${cfg.min_interval_s} s`);
-  for (const t of spawned) if (!(await tmuxHas(t))) spawned.delete(t);
-  if (spawned.size >= cfg.max_seats) throw new Refusal("limit", `this machine already runs ${spawned.size} app-started seats (max ${cfg.max_seats})`);
-  if (await tmuxHas(title)) throw new Refusal("bad_request", `a seat named ${title} already runs here`);
-  lastSpawnAt = now;
+async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, flags = [], configDir = cfg.claude_config_dir, carryEnv = {}, paced = true, replacing = null }) {
+  await startPreflight({ title, dir, sessionId, configDir, bin: extra ? bin : cfg.bin, paced, replacing });
+  lastSpawnAt = Date.now();
 
   const argv = [dir, "--title", title, "--mode", mode];
   if (sessionId) argv.push("--resume", sessionId);
@@ -276,7 +307,7 @@ async function startSeat({ dir, title, mode, prompt, sessionId, bin, extra, flag
 
   // The seat gets THIS machine's ordinary seat token — never anything the
   // server sent — and none of the agent's own opt-ins (notify, fleet).
-  const env = { ...process.env, CLAUDIVERSE_URL: cfg.server, CLAUDIVERSE_TOKEN: cfg.seat_token };
+  const env = { ...process.env, ...carryEnv, CLAUDIVERSE_URL: cfg.server, CLAUDIVERSE_TOKEN: cfg.seat_token };
   for (const k of ["CLAUDIVERSE_NOTIFY", "CLAUDIVERSE_FLEET", "CLAUDIVERSE_ORIGIN", "CLAUDIVERSE_HOST_AGENT_CONFIG"]) delete env[k];
 
   log(`${sessionId ? `resume ${sessionId} as` : "spawn"} ${title} in ${dir} (mode ${mode})`);
@@ -428,7 +459,17 @@ const pidAlive = (pid) => {
   }
 };
 
-const utcStart = async (pid) => (await run("ps", ["-o", "lstart=", "-p", String(pid)], { env: { ...process.env, TZ: "UTC" } })).stdout.trim();
+// A process's start, written the way Claude Code writes procStart here.
+async function processStart(pid) {
+  if (process.platform === "linux") {
+    try {
+      return statStart(fs.readFileSync(`/proc/${pid}/stat`, "utf8"));
+    } catch {
+      return null;
+    }
+  }
+  return (await run("ps", ["-o", "lstart=", "-p", String(pid)], { env: { ...process.env, TZ: "UTC" } })).stdout.trim();
+}
 
 // The config dir `runtime` keeps conversations in, or null for a runtime this
 // machine does not have.
@@ -445,7 +486,7 @@ async function adoptable({ session_ids, title, cwd }) {
   if (m.none) throw new Refusal("not_found", m.none);
   if (m.several) throw new Refusal("several", m.several);
   const r = m.record;
-  if (!sameStart(r.procStart, await utcStart(r.pid)))
+  if (!sameStart(r.procStart, await processStart(r.pid)))
     throw new Refusal("process_changed", `pid ${r.pid} is no longer the process its record names; look again`);
   await resolveInRoots(r.cwd, roots);
   if (runnerWorker(title, runnerSlots((await run("ps", ["-axo", "args="])).stdout)))
@@ -509,6 +550,197 @@ async function releaseSeat(args) {
   return { stopped: r.pid, session_id: r.sessionId.toLowerCase() };
 }
 
+// --- restart (lib/restart.mjs) ----------------------------------------------------------
+//
+// restart_seat {session_id, conversation_id?, title, fleet?, mode?, profile?}:
+// a running, idle seat is stopped cleanly and started again on the same
+// conversation, in the same folder, under the same title, with what its
+// process was started with (model, effort, every MCP config, its other options
+// verbatim, its config dir, pooling and carried environment), on the
+// machine's CURRENT runtime: picking up a new binary or mod is the point.
+// A seat in tmux gets /exit typed into its pane; one in a plain terminal
+// (not under tmux) gets SIGTERM, and comes back in tmux: adopted into the
+// seats this agent runs. A profile's seat (`profile`: its start_profile
+// args) is started by its profile. The seat is found by its conversation id
+// only, never by its name. restart_plan is the same without stopping.
+
+const STOP_WAIT_MS = 20_000;
+const RETRY_MS = 3_000;
+const MIN_IDLE_TMUX_MS = 60_000;
+// Unsent text in a plain terminal's prompt cannot be seen: such a seat must
+// have been idle longer.
+const MIN_IDLE_TERMINAL_MS = 300_000;
+
+// A process's exact argv and environment: /proc on Linux, KERN_PROCARGS2 on
+// macOS (ps joins argv with spaces, so a space inside an argument is lost).
+async function procLaunch(pid) {
+  try {
+    if (process.platform === "linux") {
+      const split = (f) => fs.readFileSync(`/proc/${pid}/${f}`, "utf8").split("\0").filter(Boolean);
+      return { argv: split("cmdline"), env: split("environ") };
+    }
+    const r = await run("python3", [new URL("./lib/procargs.py", import.meta.url).pathname, String(pid)]);
+    if (r.code === 0) return JSON.parse(r.stdout);
+  } catch {}
+  throw new Refusal("error", `cannot read pid ${pid}'s command line and environment${process.platform === "darwin" ? " (needs python3)" : ""}; restart it by hand`);
+}
+
+// The pane a record's "session:@window.%pane" names.
+const recordPane = (tmux) => (typeof tmux === "string" && tmux.includes("%") ? tmux.slice(tmux.lastIndexOf("%")) : null);
+
+// Why the seat must not be stopped now, or null: its record idle long enough;
+// in tmux, no dialog and nothing typed in its prompt.
+async function notIdle(r, title) {
+  const pane = recordPane(r.tmux);
+  const problem = idleProblem(r, Date.now(), pane ? MIN_IDLE_TMUX_MS : MIN_IDLE_TERMINAL_MS);
+  if (problem) return `${title}: ${problem}`;
+  if (pane) {
+    const cap = await run("tmux", ["capture-pane", "-p", "-e", "-t", pane]);
+    if (cap.code !== 0) return `${title}: its pane could not be read`;
+    if (dialogOpen(cap.stdout.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, ""))) return `${title} has a dialog open`;
+    const unsent = unsentPrompt(cap.stdout);
+    if (unsent === null) return `${title}'s prompt is not in view`;
+    if (unsent) return `${title} has text typed in its prompt, not sent`;
+  }
+  return null;
+}
+
+// Everything restart_seat would do, checked: the seat's record, how it would
+// come back, and the names (never values) of what it gets.
+async function restartPlan(a) {
+  const title = checkStopTitle(a);
+  const ids = [a.session_id, a.conversation_id].filter((s) => typeof s === "string");
+  if (!ids.length) throw new Refusal("bad_request", "session_id is required: a seat is found by its conversation, never by its name");
+  const m = matchSeat(sessionRecords(configDirs()), { sessionIds: ids }, pidAlive);
+  if (m.none) throw new Refusal("not_found", `${title}: ${m.none}`);
+  if (m.several) throw new Refusal("several", `${title}: ${m.several}`);
+  const r = m.record;
+  if (!sameStart(r.procStart, await processStart(r.pid))) throw new Refusal("process_changed", `pid ${r.pid} is no longer the process its record names; look again`);
+  await resolveInRoots(r.cwd, roots);
+  if (runnerWorker(title, runnerSlots((await run("ps", ["-axo", "args="])).stdout)))
+    throw new Refusal("runner", `${title} is a worker of a cv-runner slot here; its runner stops and starts it`);
+  const busy = await notIdle(r, title);
+  if (busy) throw new Refusal("busy", busy);
+
+  const inTmux = Boolean(recordPane(r.tmux));
+  const rt = SPAWN_RUNTIME;
+  const base = { title, record: r, inTmux, action: inTmux ? "restart" : "adopt", old_version: r.version ?? null };
+  // Its tmux session, which the stop closes: the new seat may take its name.
+  const freeing = inTmux ? tmuxSession(r.tmux) : null;
+  // A dry run's count of places taken by the seats planned before this one.
+  const taking = Number.isInteger(a.taking) && a.taking > 0 ? a.taking : 0;
+
+  if (a.profile) {
+    const configDir = runtimeConfigDir(a.profile.runtime);
+    if (!configDir || !findTranscript(configDir, r.cwd, r.sessionId))
+      throw new Refusal("not_found", `${title}'s profile runs in a config dir without this conversation; it would start a new one`);
+    const l = await profileLaunch({ ...a.profile, resume: r.sessionId, resume_policy: "fixed" });
+    await startPreflight({ title: l.p.name, dir: l.p.dir, sessionId: l.sessionId, configDir: l.configDir, bin: l.p.bin, paced: false, replacing: title, freeing, taking });
+    return { ...base, via: "profile", target_version: cfg.runtimes?.[a.profile.runtime]?.version ?? null,
+             argvNames: [], envNames: [], carried: [], dropped: [],
+             manual: resumeCommand({ cwd: l.p.dir, configDir: l.p.configDir, bin: l.p.bin || "claude", sessionId: r.sessionId }),
+             start: () => launchProfile(l, { paced: false, replacing: title }) };
+  }
+
+  const { argv, env } = await procLaunch(r.pid);
+  const cl = readClaudeArgv(argv);
+  if (cl.refuse) throw new Refusal("not_allowed", `${title}: ${cl.refuse}`);
+  const ce = readClaudeEnv(env);
+  const configDir = ce.configDir || r.configDir;
+  if (!findTranscript(configDir, r.cwd, r.sessionId))
+    throw new Refusal("not_found", `${title}'s conversation is not in ${configDir}; it would start a new one`);
+  let tokenFile = null;
+  if (ce.oauthToken && rt?.oauthTokenFile) {
+    try {
+      if (fs.readFileSync(rt.oauthTokenFile, "utf8").trim() === ce.oauthToken.trim()) tokenFile = rt.oauthTokenFile;
+    } catch {}
+  }
+  const b = rebuildArgs(cl, ce, { live: MODE_OK(a.mode) ? a.mode : null, fleet: a.fleet, tokenFile });
+  const bin = rt?.bin || cfg.bin || "claude";
+  await startPreflight({ title, dir: r.cwd, sessionId: r.sessionId, configDir, bin, paced: false, replacing: title, freeing, taking });
+  return { ...base, via: "spawn", target_version: rt ? (cfg.runtimes?.[rt.name]?.version ?? null) : null,
+           argvNames: b.argvNames, envNames: b.envNames, carried: b.carried, dropped: b.dropped,
+           manual: resumeCommand({ cwd: r.cwd, configDir: ce.configDir, bin, sessionId: r.sessionId }),
+           start: () => startSeat({ dir: r.cwd, title, mode: b.mode, sessionId: r.sessionId, bin, extra: b.extra, configDir, carryEnv: ce.carry, paced: false, replacing: title }) };
+}
+
+const MODE_OK = (m) => typeof m === "string" && CYCLE.includes(m);
+
+// What a plan says to the server (names, never values).
+// takes_place: restarted, it takes a new place under max_seats (this agent
+// did not start it).
+const publicPlan = (p) => ({ title: p.title, action: p.action, via: p.via, pid: p.record.pid, tmux: p.inTmux, old_version: p.old_version,
+  takes_place: !spawned.has(p.title),
+  target_version: p.target_version, argv: p.argvNames, env: p.envNames, carried: p.carried, dropped: p.dropped });
+
+async function restartSeat(a) {
+  const plan = await restartPlan(a);
+  const r = plan.record;
+  // Re-checked right before the stop, from the record as it is now.
+  let now;
+  try {
+    now = { ...r, ...JSON.parse(fs.readFileSync(r.file, "utf8")) };
+  } catch {
+    throw new Refusal("process_changed", `${plan.title}'s session record went away; look again`);
+  }
+  const busy = await notIdle(now, plan.title);
+  if (busy) throw new Refusal("busy", busy);
+
+  const gone = async (ms) => {
+    for (let t = 0; t < ms; t += 200) {
+      if (!pidAlive(r.pid)) return true;
+      await new Promise((res) => setTimeout(res, 200));
+    }
+    return !pidAlive(r.pid);
+  };
+  log(`restart ${plan.title}: stopping pid ${r.pid} (${r.version ?? "?"}, ${plan.inTmux ? `tmux ${r.tmux}` : "a plain terminal"})`);
+  if (plan.inTmux) {
+    const k = await run("tmux", ["send-keys", "-t", recordPane(r.tmux), "/exit", "Enter"]);
+    if (k.code !== 0) throw new Refusal("error", `tmux send-keys failed: ${k.stderr.trim()}`);
+  } else {
+    process.kill(r.pid, "SIGTERM");
+  }
+  let killed = false;
+  if (!(await gone(STOP_WAIT_MS))) {
+    killed = true;
+    process.kill(r.pid, plan.inTmux ? "SIGTERM" : "SIGKILL");
+    if (!(await gone(10_000))) {
+      process.kill(r.pid, "SIGKILL");
+      if (!(await gone(5_000))) throw new Refusal("error", `pid ${r.pid} survived SIGKILL; ${plan.title} was not restarted`);
+    }
+    log(`restart ${plan.title}: pid ${r.pid} did not exit within ${STOP_WAIT_MS / 1000} s, so it was killed`);
+  }
+  for (let t = 0; t < 2000 && fs.existsSync(r.file); t += 200) await new Promise((res) => setTimeout(res, 200));
+  if (fs.existsSync(r.file)) fs.rmSync(r.file, { force: true });
+  // Its tmux session may outlive claude as a shell: closed, so the title is free.
+  const session = tmuxSession(r.tmux);
+  if (session && (await tmuxHas(session)) && !(await paneSession(session))) await run("tmux", ["kill-session", "-t", `=${session}`]);
+
+  // Everything was checked before the stop. Should the start fail anyway, it
+  // is tried once more; a seat left down says so, with how to bring it back
+  // (not_restarted: the server ends its row).
+  let why = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      if (await tmuxHas(plan.title)) throw new Refusal("bad_request", `a tmux session named ${plan.title} is still there`);
+      await plan.start();
+      why = null;
+      break;
+    } catch (e) {
+      why = e instanceof Refusal ? e.message : String(e.message || e);
+      log(`restart ${plan.title}: start ${attempt} of 2 failed: ${why}`);
+      if (attempt === 1) await new Promise((res) => setTimeout(res, RETRY_MS));
+    }
+  }
+  if (why) throw new Refusal("not_restarted", `${plan.title} was STOPPED, and did not start again (tried twice): ${why}. Bring it back with: ${plan.manual}`);
+  const note = [
+    killed ? `it did not exit within ${STOP_WAIT_MS / 1000} s and was killed` : null,
+    plan.inTmux ? null : "the old terminal window is left showing the exited claude",
+  ].filter(Boolean).join("; ") || null;
+  log(`restart ${plan.title}: ${plan.action === "adopt" ? "adopted into tmux" : "started again"} on ${plan.target_version ?? "the default runtime"}`);
+  return { ...publicPlan(plan), stopped: r.pid, killed, session_id: r.sessionId.toLowerCase(), note };
+}
+
 // The desktop's whitelist edits. The config file is the record, and the
 // watcher below re-joins with the new list, so the app sees the change.
 async function remoteRoots(op, args) {
@@ -537,6 +769,8 @@ async function handle(op, args) {
   if (op === "locate_seat") return locateSeat(args);
   if (op === "release_seat") return releaseSeat(args);
   if (op === "interrupt") return interruptSeat(args || {});
+  if (op === "restart_plan") return publicPlan(await restartPlan(args || {}));
+  if (op === "restart_seat") return restartSeat(args || {});
   throw new Refusal("bad_request", `unknown op ${op}`);
 }
 
@@ -570,7 +804,7 @@ function connect() {
     const live = await liveSeats().catch(() => null);
     // A socket that closed or rejoined meanwhile is not this join's.
     if (jr !== joinRef || ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()), spawn: spawnChoices(SPAWN_RUNTIME), ...(live ? { live_seats: live } : {}) }]));
+    ws.send(JSON.stringify([joinRef, joinRef, topic, "phx_join", { roots, version: VERSION, remote_roots: remoteAllowed(), ...machineChoices(cfg, readCatalog()), spawn: spawnChoices(SPAWN_RUNTIME, cfg.runtimes?.[SPAWN_RUNTIME?.name]?.version), ...(live ? { live_seats: live } : {}) }]));
     clearInterval(heartbeat);
     heartbeat = setInterval(() => send("heartbeat", {}, null, "phoenix"), 30_000);
   });

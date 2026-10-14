@@ -175,6 +175,84 @@ Purpose: the machines a user's host agents have joined as, and when each was las
 
 Indexes: unique `(user_id, name)`.
 
+### `fleet_settings`
+
+Purpose: what the operator sets per fleet (`Fleets`): `paused`, which a bulk restart leaves out by default. A fleet with no row is not paused. Feature page: [profiles-and-hosts.md](profiles-and-hosts.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `fleet` | string | not null |
+| `paused` | boolean | not null, default `false` |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, fleet)`.
+
+### `github_tokens`
+
+Purpose: the operator's GitHub tokens (`GitHub`), one per resource owner, and what GitHub said about each at its last check. Schema `GitHub.Token`. Feature page: [github.md](github.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `label` | string | not null |
+| `token` | binary | not null; AES-256-GCM ciphertext (`Vault`, associated data `github_tokens.v1`) |
+| `kind` | string | not null; `fine_grained`, `classic` or `other`, from its prefix |
+| `login` | string | GitHub account |
+| `scopes` | string | a classic token's `X-OAuth-Scopes`; null for fine-grained |
+| `expires_at` | utc_datetime | null: none reported by GitHub |
+| `expires_on` | date | an expiry the operator entered, used when GitHub reports none |
+| `repos` | text | JSON list of `owner/name` it reaches |
+| `repos_count` | integer | repos `GET /user/repos` lists |
+| `status` | string | not null, default `ok`; `unauthorized`, `error` |
+| `last_error` | string | |
+| `checked_at` | utc_datetime | |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, label)`.
+
+### `github_cursors`
+
+Purpose: where each GitHub source was read up to (`GitHub.Poller`), so a restart fires nothing twice. Schema `GitHub.Cursor`. Feature page: [github.md](github.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `source` | string | not null; `repo:owner/name`, `search:<review-requested\|assigned\|mentioned>`, `token:<id>` |
+| `data` | map | not null, default `{}`; a repository's `since` and `ci` (per open pull request: head `sha`, checks `state`), a search's last `keys`, a token's `warned_for` |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, source)`.
+
+### `usage_samples`
+
+Purpose: the account pool's usage history (`AnthropicAuths.UsageHistory`), one row per account per usage reading, thinned as it ages. Schema `AnthropicAuths.UsageSample`. Feature page: [account-pool.md](account-pool.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `anthropic_auth_id` | references `anthropic_auths` | not null; `on_delete: :delete_all` |
+| `at` | utc_datetime | not null. When it was read |
+| `weekly_pct`, `session_pct` | float | null when the reading had no such limit |
+| `weekly_resets_at`, `session_resets_at` | utc_datetime | null when none was reported |
+
+No timestamps: `at` is the row's time. Indexes: `(anthropic_auth_id, at)`.
+
+### `runner_slots`
+
+Purpose: each runner slot's last heartbeat, kept (`Runners`), so whether a slot was alive through a window can be answered after a server restart. Schema `Runners.Slot`. Feature page: [tasks-and-runners.md](tasks-and-runners.md).
+
+| Column | Type | Null / default |
+|---|---|---|
+| `user_id` | references `users` | not null; `on_delete: :delete_all` |
+| `slot` | string | not null. The runner's `--slot` |
+| `fleet`, `host`, `lane` | string | null. From its last report |
+| `state` | string | not null. `idle`, `busy`, `halted` or `stopped` |
+| `beating_since` | utc_datetime | not null. When its current run of beats began |
+| `last_seen_at` | utc_datetime | not null. Its last heartbeat |
+| `inserted_at`, `updated_at` | naive_datetime | not null |
+
+Indexes: unique `(user_id, slot)`.
+
 ## Seat profiles
 
 ### `profiles`
@@ -198,6 +276,7 @@ Purpose: one record per managed seat, started by its machine's host agent. Schem
 | `mcp` | `{:array, :string}` | not null, default `[]` |
 | `pooled` | boolean | not null, default `false` in the migration; **`true` in the Ecto schema** (see Notes below) |
 | `autostart` | boolean | not null, default `false` |
+| `protected` | boolean | not null, default `false`. A bulk restart leaves the seat out unless named (`Restarts`) |
 | `resume` | string | not null, default `"latest"` |
 | `debug` | boolean | not null, default `false` |
 | `last_start` | map | null |
@@ -806,6 +885,13 @@ Migrations run automatically at boot in a release: `application.ex` starts `Ecto
 | `20261012090000_profiles_permission_mode_defaults_to_auto` | Rebuilds `profiles` with `permission_mode` defaulting to `"auto"` (SQLite cannot change a column default in place): the same columns, constraints and index, every row copied as it was, the AUTOINCREMENT counter kept. Existing rows keep their mode. |
 | `20261012120000_create_join_codes` | `join_codes` and its indexes |
 | `20261012150000_create_machines` | `machines` and its index |
+| `20261012170000_create_runner_slots` | `runner_slots` and its index |
+| `20261012190000_create_usage_samples` | `usage_samples` and its index |
+| `20261013090000_add_protected_to_profiles` | `profiles.protected` |
+| `20261013090100_create_fleet_settings` | `fleet_settings` and its index |
+| `20261014090000_create_github_tokens` | `github_tokens` and its index |
+| `20261014090100_add_expiry_and_repos_to_github_tokens` | `github_tokens.expires_on`, `github_tokens.repos` |
+| `20261014090200_create_github_cursors` | `github_cursors` and its index |
 
 Notes on running them:
 

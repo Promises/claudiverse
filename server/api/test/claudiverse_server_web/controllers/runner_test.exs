@@ -81,6 +81,33 @@ defmodule ClaudiverseServerWeb.RunnerTest do
     assert fleets(ctx) == []
   end
 
+  # Heartbeats were memory only: after a network drop (2026-10-12) nobody could
+  # say whether four runners had beaten through the night. The row answers it.
+  test "a slot's last heartbeat and how long it has beaten without a gap are kept", ctx do
+    Application.put_env(:claudiverse_server, :runner_missing_after_ms, 75_000)
+    beat(ctx, idle())
+    first = Repo.get_by!(Runners.Slot, user_id: ctx.user.id, slot: "lorem-w1")
+    assert %{fleet: "lorem-fleet", state: "idle", host: "m1", lane: "lorem-tasks-deep"} = first
+    assert first.beating_since == first.last_seen_at
+
+    # A beat within the gap: the same run of beats goes on.
+    Repo.update_all(Runners.Slot, set: [last_seen_at: DateTime.add(first.last_seen_at, -30), beating_since: DateTime.add(first.beating_since, -3600)])
+    beat(ctx, idle(%{state: "busy", seat: "lorem-w1-t5", task: 5}))
+    on = Repo.get_by!(Runners.Slot, user_id: ctx.user.id, slot: "lorem-w1")
+    assert on.state == "busy"
+    assert DateTime.diff(on.last_seen_at, on.beating_since) >= 3600
+
+    # A beat after a longer silence starts a new run.
+    Repo.update_all(Runners.Slot, set: [last_seen_at: DateTime.add(on.last_seen_at, -600)])
+    beat(ctx, idle())
+    again = Repo.get_by!(Runners.Slot, user_id: ctx.user.id, slot: "lorem-w1")
+    assert again.beating_since == again.last_seen_at
+
+    # Closing cleanly is kept too.
+    beat(ctx, idle(%{state: "stopped"}))
+    assert %{state: "stopped"} = Repo.get_by!(Runners.Slot, user_id: ctx.user.id, slot: "lorem-w1")
+  end
+
   test "another user's runners are not listed", ctx do
     {_other, other_api} = user_with_token(%{email: "other@test.com"})
     build_conn() |> put_req_header("authorization", "Bearer " <> other_api) |> post("/api/runners/heartbeat", idle()) |> json_response(200)

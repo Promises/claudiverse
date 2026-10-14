@@ -83,10 +83,10 @@ Under the toolbar, `Machines` lists every machine from `GET /api/hosts` (`listHo
 | Folder | the machine's first root | Each root and its subfolders, read from the machine (`GET /api/hosts/:host/ls`). The agent refuses anything outside its roots. |
 | Name | the folder's name, made safe as the agent makes it | 1 to 64 of `A-Z a-z 0-9 . _ -`; checked before asking. |
 | Permission mode | `Auto` | The machine's own `modes` (all four from an older agent): Auto, Ask before acting, Accept edits, Plan only. |
-| Model | the machine's default | Opus, Sonnet or Haiku (`opus`, `sonnet`, `haiku`, which Claude Code resolves). Sent only when chosen. |
+| Model | the machine's default | A current model by its exact id (the server's list, `GET /api/models`, as in [Seat view](seat-view.md#model-picker)), or an alias Claude Code resolves (`opus`, `sonnet`, `haiku`, `opusplan`). Sent only when chosen. |
 | Use the server's account pool | on | A pool-only machine (no Claude login of its own) is always pooled: checked, fixed, and nothing is sent. |
 
-Model and pool are offered only where the machine's `spawn` lists them (host agent 0.13+); for an older agent they are disabled and the form says to run the installer again on that machine (the server would refuse them, 409). `Start the seat` posts the request; a refusal is shown in the server's words. Once the server takes it (202), the form closes and a line under the toolbar reads `Starting <name> on <machine>…`, then, from the `host_spawn` event for that `spawn_id`, `<name> is running on <machine>.` or `<name> did not start on <machine>: <error>`. A finished line can be dismissed.
+Model and pool are offered only where the machine's `spawn` lists them (host agent 0.13+); for an older agent they are disabled and the form says to run the installer again on that machine (the server would refuse them, 409). `Start the seat` posts the request; a refusal is shown in the server's words, except "spawning seats is app-only", and a sign-in whose scope is not `app` or `super`, which show the fresh sign-in notice and disable the button (see [setup-and-login.md](setup-and-login.md)). Once the server takes it (202), the form closes and a line under the toolbar reads `Starting <name> on <machine>…`, then, from the `host_spawn` event for that `spawn_id`, `<name> is running on <machine>.` or `<name> did not start on <machine>: <error>`. A finished line can be dismissed.
 
 ### Deleting a seat
 
@@ -187,6 +187,7 @@ DELETE /api/sessions/12
 - `server/web/src/components/Machines.tsx`
 - `server/web/src/components/StartSeat.tsx`
 - `server/web/src/lib/startSeat.ts`
+- `server/web/src/lib/models.ts`, `server/web/src/lib/models.test.ts`
 - `server/web/src/hooks/useOperatorEvents.ts`
 - `server/web/src/lib/types.ts`
 - `server/web/src/components/BrandLogo.tsx`

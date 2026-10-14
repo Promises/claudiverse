@@ -7,16 +7,24 @@ defmodule ClaudiverseServer.Runners do
   on the server whatsoever (measured 2026-10-05).
 
   A runner POSTs a heartbeat (`heartbeat/2`) on every change of its state and
-  every ~30 s. The registry is in memory and derived, never stored: a slot
-  whose last heartbeat is older than `missing_after_ms` reads "missing", and a
-  restart of the server forgets slots until they next beat (≤30 s).
+  every ~30 s. The registry is in memory and derived: a slot whose last
+  heartbeat is older than `missing_after_ms` reads "missing", and a restart of
+  the server forgets slots until they next beat (≤30 s). Each beat is also
+  kept as the slot's row (Runners.Slot: last_seen_at, and beating_since, the
+  start of its current run of beats), so whether a slot was alive through a
+  window can be answered afterwards. MEASURED 2026-10-12: after a network drop
+  nobody could tell whether four runners had beaten through the night, as
+  nothing kept their beats.
 
   Every change a viewer would see — state, seat, task, or going missing — is
   broadcast as "runner" on the user's `Hosts.events_topic/1`.
   """
   use GenServer
 
-  alias ClaudiverseServer.Hosts
+  require Logger
+
+  alias ClaudiverseServer.{Hosts, Repo}
+  alias ClaudiverseServer.Runners.Slot
 
   @states ~w(idle busy halted stopped)
 
@@ -45,6 +53,8 @@ defmodule ClaudiverseServer.Runners do
   def handle_call({:heartbeat, user_id, report}, _from, state) do
     key = {user_id, report.slot}
     previous = Map.get(state, key)
+
+    keep(user_id, report)
 
     if report.state == "stopped" do
       if previous, do: announce(user_id, Map.put(view(previous), :status, "stopped"))
@@ -79,6 +89,25 @@ defmodule ClaudiverseServer.Runners do
       end)
 
     {:noreply, state}
+  end
+
+  # The slot's row: this beat, and whether it continues the slot's run of beats
+  # (the last one less than "missing" ago) or starts a new one. Bookkeeping: a
+  # failed write must never cost the heartbeat.
+  defp keep(user_id, report) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    row = Repo.get_by(Slot, user_id: user_id, slot: report.slot)
+    continues? = row && DateTime.diff(now, row.last_seen_at, :millisecond) <= missing_after_ms()
+    attrs = [fleet: report[:fleet], state: report.state, host: report[:host], lane: report[:lane],
+             beating_since: if(continues?, do: row.beating_since, else: now), last_seen_at: now]
+
+    if row do
+      row |> Ecto.Changeset.change(attrs) |> Repo.update()
+    else
+      Repo.insert(struct(Slot, [user_id: user_id, slot: report.slot] ++ attrs))
+    end
+  rescue
+    e -> Logger.warning("[runners] could not keep #{report.slot}'s heartbeat: #{Exception.message(e)}")
   end
 
   defp changed?(a, b), do: Map.take(a, [:state, :seat, :task, :fleet, :lane, :host]) != Map.take(b, [:state, :seat, :task, :fleet, :lane, :host]) or Map.get(a, :announced_missing, false)

@@ -240,6 +240,29 @@ defmodule ClaudiverseServerWeb.ProxyPlugTest do
     end
   end
 
+  # The observer's pending idle check once a turn has ended (a ref other than
+  # `previous`), and firing it as its timer would: then its Room has stored
+  # whatever that mirrored.
+  defp pending_idle_check(sid, previous) do
+    eventually(fn ->
+      ref = :sys.get_state(observer_pid(sid)).idle_ref
+      ref != nil and ref != previous and ref
+    end)
+  end
+
+  defp fire_idle_check(sid, ref) do
+    pid = observer_pid(sid)
+    send(pid, {:idle_check, ref, "end_turn"})
+    :sys.get_state(pid)
+    # What it mirrored was cast to the Room before that call returned.
+    Room.get_status(proxy_session(sid).id)
+  end
+
+  defp observer_pid(sid) do
+    [{pid, _}] = Registry.lookup(ClaudiverseServer.Proxy.Registry, sid)
+    pid
+  end
+
   defp observer_state(sid) do
     eventually(fn -> Enum.find(ClaudiverseServer.Proxy.Observer.status(), &(&1.claude_session_id == sid)) end)
   end
@@ -326,10 +349,18 @@ defmodule ClaudiverseServerWeb.ProxyPlugTest do
   end
 
   test "a queued follow-up inside the debounce never reports a false idle", ctx do
+    # The debounce is fired by hand, never by the clock: a follow-up "inside"
+    # it must not depend on how fast this machine is (it flaked under load).
+    Application.put_env(:claudiverse_server, :proxy_idle_ms, :timer.hours(1))
     send_msgs(ctx, "s-q", [user_msg("one")])
-    Process.sleep(div(@idle_ms, 3))
+    first = pending_idle_check("s-q", nil)
     send_msgs(ctx, "s-q", [user_msg("one"), %{role: "assistant", content: []}, user_msg("two")])
-    Process.sleep(@idle_ms * 4)
+    second = pending_idle_check("s-q", first)
+
+    # The first turn's check fires late, after the follow-up began: no idle.
+    fire_idle_check("s-q", first)
+    refute "idle" in types("s-q")
+    fire_idle_check("s-q", second)
     assert Enum.count(types("s-q"), &(&1 == "idle")) == 1
     assert List.last(types("s-q")) == "idle"
   end

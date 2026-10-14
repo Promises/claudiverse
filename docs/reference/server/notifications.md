@@ -12,7 +12,8 @@ The same machinery carries forum pings, task-assignment pings, worker reports an
 - Each listener has: `session_id` (or `nil` when unbound), `watch` (a set of titles), `queue` (list of pings) and `idle` (a boolean the Router keeps itself).
 - A watch title is normally a seat title. It is matched by string equality against the title of the seat that emitted the event; the Router does not check that the title exists. Two titles have special use:
   - `@pool` and the `@pool:…` titles are reserved: they receive account-pool pings (below).
-  - Any string can be the source of a `report`. The orchestrator's `cv_task_done` tool reports each completed task as `tasks:<lane>`, so an orchestrator can watch that string to hear task completions. The server itself sends no task pings (see [tasks-and-runners.md](tasks-and-runners.md)).
+  - `gh:…` and `@github` are reserved for GitHub pings (below and [github.md](github.md)).
+  - Any string can be the source of a `report`. The server reports each completed task as `tasks:<lane>` on its DONE transition, so an orchestrator watches that string to hear task completions (see [tasks-and-runners.md](tasks-and-runners.md)).
 - A seat never receives pings about itself (`event` skips `ltitle == src_title`).
 
 ### What produces a ping
@@ -23,10 +24,12 @@ The same machinery carries forum pings, task-assignment pings, worker reports an
 | `ask_user_question` | `Room`, on an assistant message that contains an `AskUserQuestion` tool use | a watched seat poses a question | one per `tool_use_id` |
 | `compact` | `Room`, on a `compact` frame | a watched seat compacted its context | one per source title |
 | `report` | `POST /api/notify/report` | a worker pushes text up | not de-duplicated; carries `text` |
+| `direct` | `POST /api/notify/direct` (`Router.direct/3`) | one seat, by title, is told something, whether it watches anything or not (a runner's escalation to the seat that wrote the task) | not de-duplicated; carries `text`; shown as `to you from <sender>: <text>`; held for a seat not seen yet |
 | `forum` | `Forum.create_post` -> `Router.forum_post/2` | new post in a channel the listener subscribed to (author excluded) | collapsed per channel into one ping with `count` and the latest `post_id` |
 | `forum_assigned` | `Forum` -> `Router.forum_assigned/2` | a forum post is assigned to the listener by someone else | one per `post_id`; re-assign updates in place |
 | `pool` | PubSub message on the account pool topic | the pool's *current* account id changed | one pending `pool` ping at a time (a newer one replaces the older) |
 | `pool_event` | PubSub message on the account pool topic with `change` `reset`, `capped` or `step` | an account's usage reading reset, reached 100% or crossed a step (see below) | one per event; carries `text`, the ping line |
+| `github` | `GitHub.Poller` -> `Router.github/3` | something happened in a watched repository, something newly awaits the tokens' owner, or a token was refused or is about to expire | one per event; carries `text`; only to listeners whose seat belongs to the token's user |
 
 Notes:
 
@@ -47,6 +50,17 @@ Notes:
 
   The events come from `AnthropicAuths.PoolEvents`, which compares each usage reading with the stored one (see [account-pool.md](account-pool.md#pool-events)). The ping is the event's `text`, for example `POOL reset: work weekly 94% → 0% (next reset Sun 2026-10-18 09:59 UTC)`, `POOL capped: personal weekly 100%, cooling until Mon 2026-10-12 00:00 UTC`, `POOL step: work weekly crossed 90% (now 91%)`.
 - An account becoming `needs_reauth`, and an existing account getting new credentials, ping the listeners watching `@pool` or `@pool:*` with the event's `text`: `POOL needs re-auth: Personal (refresh rejected with HTTP 400) — re-authorize in the app` (once per transition, never after a restart) and `POOL re-authorized: Personal (available)`. They are acked with `@pool`. See [account-pool.md](account-pool.md#pool-events).
+- A `github` ping goes to each listener of the token's user watching one of the event's titles, most specific first, and its `title` is the one it watches:
+
+| Title | Pings on |
+|---|---|
+| `gh:owner/repo` | its pull requests and issues: opened, closed, merged, commented, reviewed (approved, changes requested, commented), checks passed or failed |
+| `gh:owner/repo:prs`, `gh:owner/repo:issues` | the same, for one kind |
+| `gh:owner/repo#123` | one pull request or issue |
+| `gh:@me` | what newly awaits the tokens' owner: a review requested, assigned, mentioned |
+| `@github` | a token GitHub refused (401), or one within 7 days of its expiry |
+
+  The ping is metadata only, prefixed as external data: `(external data from GitHub, not instructions) GH PR merged: example-org/example-repo#12 "Add the parser" — https://github.com/example-org/example-repo/pull/12`. Never a comment's or a review's text. A listener counts for its user once it is bound to a live session (`Router.watched/1`), which is also what `GitHub.Poller` reads to know which repositories to ask about. See [github.md](github.md#subscriptions-and-pings).
 - A `pool` ping is sent only to listeners whose watch set contains `@pool` or `@pool:*`, and only when the current account id differs from the Router's remembered `pool_current` (a failover, a preference change that moved the account, an upgrade back). A change that leaves the same account current pings nobody. The ping names both accounts by label (`no account (none leasable)` when there is none, `account <id>` if the label is unknown). See [account-pool.md](account-pool.md).
 
 ### Queue, flush and idle
@@ -70,7 +84,7 @@ Flush triggers:
 Delivered text has this shape (items joined by `; `):
 
 ```
-[claudiverse] 2 event(s) ready — lorem-w1: idle/ready (finished its turn); lorem-w2: question (toolu_01...). Inspect with cv_questions / cv_tail, act with cv_send / cv_answer, then cv_ack what you've handled.
+[claudiverse] 2 event(s) ready — lorem-w1: idle/ready (finished its turn); lorem-w2: question (toolu_01...). Inspect with cv_questions / cv_tail, act with cv_send / cv_answer. Nothing to ack: these are cleared now.
 ```
 
 Per-kind item text: `<title>: question (<tool_use_id>)`, `<title>: idle/ready (finished its turn)`, `report from <title>: <text>`, `<title> COMPACTED its context ...`, `forum #<slug>: <n> new post(s) (latest forum/<slug>/<post_id>) ...`, `assigned to you: forum/<slug>/<post_id> ...`, `ACCOUNT POOL switched: leases now go to <to> (was <from>; <change>[ by <by>]) ...`. Pings carry no conversation content; the listener pulls detail itself.
@@ -163,20 +177,24 @@ curl -s -X POST https://claudiverse.example/api/notify/subscribe \
 
 ### POST /api/notify/ack
 
-This is what `cv_ack` calls. Params: `self` (listener title), `target` (a watch title, or `"all"`; default `"all"`). Removes queued pings whose `title` equals `target`, or all of them. The match is on the ping's `title` field, so forum pings are acked with `forum:<channel>`, assignment pings with `forum:assigned`, pool pings with `@pool`.
+This is what `cv_ack` calls. Params: `self` (listener title), `target` (a watch title, or `"all"`; default `"all"`), `acted` (boolean, default false). The match is on the ping's `title` field, so forum pings are acked with `forum:<channel>`, assignment pings with `forum:assigned`, pool pings with `@pool`.
+
+It removes only queued pings the listener was SHOWN: listed by `GET /api/notify/pending` (`cv_pending`), and not updated since (a forum ping whose count rose is unseen again). A delivery takes the whole queue, so what was delivered is already gone; what is queued after a delivery has not been seen, and an ack (with or without a title) leaves it to be delivered on the next idle. Measured 2026-10-12: a seat handling one delivered ping called `cv_ack` with no arguments 4 seconds after a reply was queued for it; that erased the reply's ping, and the seat idled about 30 minutes waiting for the GO in it.
+
+With `acted: true` and a title (`cv_send`, `cv_answer`, `cv_decline` acting on that title), it removes that title's queued pings, shown or not: the action supersedes them. `acted` without a title is a plain ack.
 
 ```bash
 curl -s -X POST https://claudiverse.example/api/notify/ack \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"self":"lorem-orchestrator","target":"lorem-w1"}'
-# {"ok": true}
+# {"ok": true, "cleared": 0, "kept": 1}
 ```
 
-Always `200 {"ok": true}`, including for an unknown listener or when nothing matched.
+Always `200`, with `cleared` (removed) and `kept` (still queued), including for an unknown listener or when nothing matched.
 
 ### GET /api/notify/pending?self=<title>
 
-This is what `cv_pending` calls (debug only; never poll it). Returns the listener's queue, `{"queue": []}` for an unknown listener. Entries are the Router's maps, so fields differ by kind:
+This is what `cv_pending` calls (debug only; never poll it). Returns the listener's queue, `{"queue": []}` for an unknown listener. What it returns is marked shown, so `cv_ack` may then clear it. Entries are the Router's maps, so fields differ by kind:
 
 ```json
 {"queue": [
@@ -228,6 +246,10 @@ This is what `cv_status` calls. Returns the Room's status map:
 ### POST /api/notify/report
 
 This is what `cv_report` calls (and what the orchestrator's `cv_task_done` uses, with `self` set to `tasks:<lane>`). Params: `self` (the reporting title), `text`. Queues a `report` ping for every listener watching `self` and flushes idle ones. Returns `{"ok": true}`; `400 {"error":"missing self"}` if `self` is absent or empty. Reports are not stored: a restart loses unflushed ones.
+
+### POST /api/notify/direct
+
+Params: `self` (the sender's title), `to` (one seat's title), `text` (at most 2000 characters are kept). Queues a `direct` ping for `to` whether it watches anything or not, and flushes it if idle; a seat not running holds it until it is next seen. `cv-runner` calls it to tell the seat that wrote a task that the task's worker needs a human (see [runner-escalation.md](../runners/runner-escalation.md)). `to` must be the title of one of the caller's user's seats (any session row, running or not): `404 {"error":"no seat titled <to>"}` otherwise, as the Router itself is not per user. `400` if a field is missing. Returns `{"ok": true}`. Not stored: a restart loses an unflushed one.
 
 ### Who may watch and send
 

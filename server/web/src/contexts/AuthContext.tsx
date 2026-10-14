@@ -7,6 +7,8 @@ import { disconnectSocket } from "../lib/socket";
 interface AuthState {
   user: User | null;
   token: string | null;
+  /** The token's scope; a sign-in from the panel asks for "app". */
+  scope: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   setup: (email: string, password: string, code: string) => Promise<void>;
@@ -20,13 +22,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
     () => localStorage.getItem("token")
   );
+  const [scope, setScope] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (token) {
       authApi
         .getMe()
-        .then((res) => setUser(res.user))
+        .then((res) => {
+          setUser(res.user);
+          setScope(res.scope ?? null);
+        })
         .catch(() => {
           localStorage.removeItem("token");
           setToken(null);
@@ -42,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("token", res.token);
     setToken(res.token);
     setUser(res.user);
+    setScope("app");
   }, []);
 
   const setup = useCallback(async (email: string, password: string, code: string) => {
@@ -49,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("token", res.token);
     setToken(res.token);
     setUser(res.user);
+    setScope("app");
   }, []);
 
   const logout = useCallback(async () => {
@@ -61,10 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     disconnectSocket();
     setToken(null);
     setUser(null);
+    setScope(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, setup, logout }}>
+    <AuthContext.Provider value={{ user, token, scope, loading, login, setup, logout }}>
       {children}
     </AuthContext.Provider>
   );

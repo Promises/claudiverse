@@ -8,7 +8,7 @@ defmodule ClaudiverseServerWeb.AnthropicAuthController do
   use ClaudiverseServerWeb, :controller
 
   alias ClaudiverseServer.AnthropicAuths
-  alias ClaudiverseServer.AnthropicAuths.AnthropicAuth
+  alias ClaudiverseServer.AnthropicAuths.{AnthropicAuth, UsageHistory}
 
   # --- seat-facing ----------------------------------------------------------
 
@@ -93,6 +93,29 @@ defmodule ClaudiverseServerWeb.AnthropicAuthController do
       current_id: AnthropicAuths.current_id(),
       seats: Enum.map(AnthropicAuths.list_assignments(), &render_assignment/1)
     })
+  end
+
+  @doc """
+  GET /api/anthropic_auths/usage_history?days=28&tz=Europe/Oslo&raw=1: each
+  account's use of its weekly limit per local day (UsageHistory.report/4).
+  Any token may read it, as `index`. `days` is 1..400 (default 28), `tz` an
+  IANA zone (default the server's CV_USAGE_TZ, else Europe/Oslo), `raw=1` adds
+  the samples. 400 on a bad `days` or `tz`.
+  """
+  def usage_history(conn, params) do
+    tz = params["tz"] || UsageHistory.default_tz()
+
+    case Integer.parse(params["days"] || "28") do
+      {days, ""} when days in 1..400 ->
+        if UsageHistory.valid_zone?(tz) do
+          json(conn, UsageHistory.report(days, tz, params["raw"] in ["1", "true"]))
+        else
+          conn |> put_status(:bad_request) |> json(%{error: "tz must be an IANA time zone, e.g. Europe/Oslo"})
+        end
+
+      _ ->
+        conn |> put_status(:bad_request) |> json(%{error: "days must be a whole number from 1 to 400"})
+    end
   end
 
   @doc """

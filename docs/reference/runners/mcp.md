@@ -6,7 +6,7 @@ It runs as `node agent/tools/cv-mcp.mjs` (also the package bin `claudiverse-mcp`
 
 ## How it works
 
-The model is push, not poll. An orchestrator calls `cv_subscribe` with the titles of the seats it manages. When a watched seat finishes a turn or asks a question, the server queues a ping and injects a turn into the orchestrator once the orchestrator is idle. The ping carries no content; the orchestrator pulls only what it needs with the bounded readers (`cv_last`, `cv_tail`, `cv_questions`) and then acts (`cv_send`, `cv_answer`, `cv_decline`, `cv_ack`).
+The model is push, not poll. An orchestrator calls `cv_subscribe` with the titles of the seats it manages. When a watched seat finishes a turn or asks a question, the server queues a ping and injects a turn into the orchestrator once the orchestrator is idle. The ping carries no content; the orchestrator pulls only what it needs with the bounded readers (`cv_last`, `cv_tail`, `cv_questions`) and then acts (`cv_send`, `cv_answer`, `cv_decline`). A delivered ping is cleared by its delivery.
 
 ```mermaid
 flowchart LR
@@ -154,7 +154,7 @@ The worker example sets no `CLAUDIVERSE_SELF`; `SELF` comes from the inherited `
 | `CLAUDIVERSE_NOTIFY` | unset | `cv-mcp` | `1` registers `cv_request_human` in static mode (non-worker role) and is the initial `canNotify` in dynamic mode. |
 | `CLAUDIVERSE_LIFECYCLE` | unset | `cv-mcp` | `1` registers `cv_spawn`, `cv_stop`, `cv_ps` (unless `CLAUDIVERSE_ROLE=worker`). See [mcp-lifecycle.md](mcp-lifecycle.md). |
 | `CLAUDIVERSE_SCOPE` | unset | `cv-mcp` (`cv_doc_search`) | Default `scope` for `cv_doc_search` when the call passes none. |
-| `CV_TASK_REPORT` | unset | `cv-mcp` (`cv_task_done`) | `notify` replaces the forum copy of the completion report with a one-line direct ping from source `tasks:<lane>`. |
+| `CV_TASK_REPORT` | unset | `cv-mcp` (`cv_task_done`) | `notify`: no forum copy of the completion report. The `tasks:<lane>` ping comes from the server on the DONE transition either way. |
 
 ## Interface
 
@@ -176,7 +176,7 @@ The tools are documented per group. Every tool listed as "shared" is available t
 
 Give this to the orchestrator in its system prompt or first turn:
 
-> You orchestrate other Claude Code agents over claudiverse. First call `cv_subscribe` with the agents you manage (for example `["lorem-w1","lorem-w2"]`). You will be pinged, as a turn injected into you and prefixed `[claudiverse]`, whenever a watched agent finishes a turn or asks a question. Never poll (`cv_pending` is for debugging only); handle each ping when it arrives. To handle one, use `cv_questions`, `cv_last` (small n) or `cv_tail` (small limit) to see what happened, then act with `cv_send` (relay or instruct) or `cv_answer` / `cv_decline` (resolve a question). Use `cv_ack` for anything you handled without acting on it. Keep reads small; never request full logs.
+> You orchestrate other Claude Code agents over claudiverse. First call `cv_subscribe` with the agents you manage (for example `["lorem-w1","lorem-w2"]`). You will be pinged, as a turn injected into you and prefixed `[claudiverse]`, whenever a watched agent finishes a turn or asks a question. Never poll (`cv_pending` is for debugging only); handle each ping when it arrives. To handle one, use `cv_questions`, `cv_last` (small n) or `cv_tail` (small limit) to see what happened, then act with `cv_send` (relay or instruct) or `cv_answer` / `cv_decline` (resolve a question). A delivered ping needs no ack. Keep reads small; never request full logs.
 
 The orchestrator's loop is then: get pinged, inspect in bounded amounts, act or ack, go idle, get pinged.
 

@@ -153,18 +153,26 @@ The page renders one `MessageBubble` per message, keyed by array index, then any
 
 ### Model picker
 
-A `Model` select under the composer, disabled while disconnected. Its choices (`MODEL_CHOICES`):
+A `Model` select under the composer, disabled while disconnected. Its choices are the server's list (`GET /api/models`, see [sessions-and-rooms.md](../../server/sessions-and-rooms.md#get-apimodels)), read once per page by `useModels`; until it loads, or if it cannot be read, the built-in copy in `server/web/src/lib/models.ts` is used (a test holds the two equal). The current models come first, then `Earlier models` (Opus 4.8 down to Sonnet 4), then the aliases. A label gets ` (1M)` where the bare id is 1M (`one_m`):
 
-| Label | `id` (sent) | `match` prefix |
+| Group | Label | `id` (sent) |
 |---|---|---|
-| Opus 5 (1M) | `claude-opus-5[1m]` | `claude-opus-5` |
-| Fable 5.1 (1M) | `claude-fable-5.1[1m]` | `claude-fable-5` |
-| Sonnet | `sonnet` | `claude-sonnet` |
-| Haiku | `haiku` | `claude-haiku` |
+| Models | Opus 5.5 (1M) | `claude-opus-5-5` |
+| | Opus 5 (1M) | `claude-opus-5` |
+| | Sonnet 5.5 (1M) | `claude-sonnet-5-5` |
+| | Sonnet 5 (1M) | `claude-sonnet-5` |
+| | Haiku 5.5 (1M) | `claude-haiku-5-5` |
+| | Fable 5.1 (1M) | `claude-fable-5-1` |
+| | Fable 5 (1M) | `claude-fable-5` |
+| | Mythos 5.1 (1M) | `claude-mythos-5-1` |
+| | Mythos 5 (1M) | `claude-mythos-5` |
+| | Haiku 4.5 | `claude-haiku-4-5` |
+| Earlier models | Opus 4.8 (1M), Opus 4.7 (1M), Opus 4.6, Opus 4.5, Opus 4.1, Sonnet 4.6, Sonnet 4.5, Sonnet 4 | `claude-opus-4-8` … `claude-sonnet-4-0` |
+| Aliases | Default, Opus (latest), Sonnet (latest), Haiku (latest), Opus plan | `default`, `opus`, `sonnet`, `haiku`, `opusplan` |
 
-The `[1m]` suffix is kept in the `id` because dropping it would silently switch the seat to the smaller context window. `match` is a separate string because an assistant message reports the model without the suffix (for example `claude-opus-5`), so matching on `id` would never resolve.
+The ids are bare. Every Claude 5 model has a 1M context window with its bare id (`one_m`: `native_1m` in Claude Code 2.1.296's built-in model catalog), so no suffix is needed. A `[1m]` suffix gives the 1M window only to some earlier models (`accepts_1m_suffix`: Opus 4.6 and Sonnet 4.6, 4.5 and 4); the picker offers those by their bare id, the 200K window, and a seat already on one keeps its window until switched.
 
-The displayed value is `modelAlias(runningModel)`. `runningModel` is the `message.model` of the latest `assistant` message in the list, falling back to `session.model` from the row loaded at page open, then to nothing. `modelAlias` lowercases the reported model and picks the first choice whose `match` is a prefix of it (so a point release such as `claude-opus-5-1` still resolves), or whose lowercased `id` equals it. Because the value follows the seat's latest reply, it shows what is running, not what you last clicked, and it follows a `/model` typed in the terminal within a turn.
+The displayed value is `modelChoice(runningModel, models)`, against the same list. `runningModel` is the `message.model` of the latest `assistant` message in the list, falling back to `session.model` from the row loaded at page open, then to nothing. `modelChoice` lowercases the reported model, drops a trailing `[1m]`, and looks for a choice with exactly that id; a dated id (`claude-haiku-4-5-20251001`) matches the id before its date. It never matches on a prefix: `claude-opus-5` is a prefix of `claude-opus-5-5`, and prefix matching once showed Opus 5.5 seats as Opus 5, so choosing that entry would have switched them down to Opus 5. Because the value follows the seat's latest reply, it shows what is running, not what you last clicked, and it follows a `/model` typed in the terminal within a turn.
 
 If no choice matches, an extra first option is shown with the raw reported model id as its text (or `unknown` if there is none), so the control never claims a model the seat is not running.
 
@@ -201,6 +209,7 @@ Choosing an option sends `send_message` with `{"content": "/model <id>"}`, for e
 ## Source
 
 - `server/web/src/pages/SessionPage.tsx`
+- `server/web/src/lib/models.ts`, `server/web/src/lib/models.test.ts`, `server/web/src/hooks/useModels.ts`, `server/web/src/api/models.ts`
 - `server/web/src/hooks/useSession.ts`
 - `server/web/src/hooks/useDocumentTitle.ts`
 - `server/web/src/lib/socket.ts`

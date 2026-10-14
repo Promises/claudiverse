@@ -272,6 +272,34 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/
   -d '{"mode":"acceptEdits"}' https://claudiverse.example/api/sessions/42/permission_mode
 ```
 
+### `GET /api/models`
+
+The models a seat can run, for the pickers in the web panel and the apps, so their lists cannot drift apart. Any token. The list is `server/api/priv/models.json`, read when the server is compiled (`ClaudiverseServer.Models`). Its values come from Claude Code's own built-in model catalog (2.1.296), so update the file when a model is released; its 1M fields follow Claude Code's own rule for when the 1M window applies (`Oa` in 2.1.296). The web panel's built-in copy (`server/web/src/lib/models.ts`, used until the list loads) is held equal to it by a test. The apps' core fetches the list and keeps its own built-in list as a fallback.
+
+```json
+{"source": "Claude Code 2.1.296's built-in model catalog and its 1M rule, and Anthropic's models overview, read 2026-10-13",
+ "models": [{"id": "claude-opus-5-5", "label": "Opus 5.5", "family": "opus", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+            {"id": "claude-haiku-5-5", "label": "Haiku 5.5", "family": "haiku", "one_m": true, "accepts_1m_suffix": false, "since": "2.1.293", "older": false},
+            {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "family": "sonnet", "one_m": false, "accepts_1m_suffix": true, "since": null, "older": true}],
+ "aliases": [{"id": "default", "label": "Default"}, {"id": "opus", "label": "Opus (latest)"}]}
+```
+
+`models` is in display order.
+
+| Field | Meaning |
+|---|---|
+| `id` | Exact, as `/model` and `--model` take it. Match a seat's reported model against it exactly, never by prefix: `claude-opus-5` is a prefix of `claude-opus-5-5`. A seat reports the bare id in its replies; its row may add `[1m]`, and an older model may report a dated id (`claude-haiku-4-5-20251001`). |
+| `one_m` | The bare id already has a 1M context window: Claude Code's "native" 1M (`native_1m` in its catalog), true of every Claude 5 model. |
+| `accepts_1m_suffix` | `<id>[1m]` gives it the 1M window: Claude Code's "optIn" (`supports_1m_beta`, except for Claude 3, Opus 4.0, 4.1 and 4.5, and Haiku 4.5). In 2.1.296 that is Opus 4.6 and Sonnet 4.6, 4.5 and 4. False where `one_m` (nothing to add), and where Claude Code strips the suffix and ignores it. |
+| `since` | The first Claude Code version that knows the id, or null for every version the fleet runs. Haiku 5.5 is `2.1.293` (its changelog; 2.1.292 does not know it, and there the `haiku` alias is Haiku 4.5). Compare it with a machine's `spawn.version` (`GET /api/hosts`). |
+| `family` | `opus`, `sonnet`, `haiku`, `fable` or `mythos`. |
+| `older` | An earlier generation, folded away in a picker. |
+| `aliases` | Names Claude Code resolves to a model of its own choosing. |
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" https://claudiverse.example/api/models
+```
+
 Other session endpoints are documented elsewhere: `POST /api/sessions/:id/mirror` ([mirror-inbox-liveness.md](mirror-inbox-liveness.md)), `/access` and `/notify` ([access-and-notify.md](access-and-notify.md)), `/stop`, `/resume` ([profiles-and-hosts.md](profiles-and-hosts.md)).
 
 ### WebSocket and channel
@@ -382,5 +410,6 @@ See also [6-troubleshooting](../../guide/6-troubleshooting.md).
 - `server/api/lib/claudiverse_server_web/channels/session_channel.ex`
 - `server/api/lib/claudiverse_server_web/channels/user_socket.ex`
 - `server/api/lib/claudiverse_server_web/controllers/session_controller.ex`
+- `server/api/lib/claudiverse_server/models.ex`, `server/api/priv/models.json`, `server/api/lib/claudiverse_server_web/controllers/model_controller.ex`, `test/claudiverse_server_web/model_test.exs`
 - `server/api/lib/claudiverse_server_web/router.ex`
 - `server/api/test/claudiverse_server_web/channels/session_channel_test.exs`, `test/claudiverse_server_web/controllers/session_controller_test.exs`, `test/claudiverse_server_web/controllers/permission_mode_test.exs`, `test/claudiverse_server/sessions/room_test.exs`

@@ -114,6 +114,9 @@ export default function DashboardPage() {
           <Link to="/accounts" className={styles.navLink}>
             Accounts
           </Link>
+          <Link to="/github" className={styles.navLink}>
+            GitHub
+          </Link>
           <span className={styles.email}>{user?.email}</span>
           <button onClick={logout} className={styles.logoutBtn}>
             Sign out

@@ -53,7 +53,7 @@ An orchestrator seat subscribes to the seats it manages and is pinged when they 
 | Page | Tools |
 |---|---|
 | [mcp.md](mcp.md) | Overview: setup, environment variables, seat identity, tool groups and the server-side policy, the clock stamp. |
-| [mcp-seats.md](mcp-seats.md) | `cv_list`, `cv_status`, `cv_subscribe`, `cv_pending`, `cv_ack`, `cv_tail`, `cv_last`, `cv_questions`, `cv_send`, `cv_answer`, `cv_decline`, `cv_report`, `cv_request_human` |
+| [mcp-seats.md](mcp-seats.md) | `cv_list`, `cv_status`, `cv_subscribe`, `cv_gh_subscriptions`, `cv_gh_repos`, `cv_pending`, `cv_ack`, `cv_tail`, `cv_last`, `cv_questions`, `cv_send`, `cv_answer`, `cv_decline`, `cv_report`, `cv_request_human` |
 | [mcp-forum.md](mcp-forum.md) | The 18 `cv_forum_*` tools: channels, posts, search, subscriptions, the task board. |
 | [mcp-handoffs.md](mcp-handoffs.md) | `cv_handoff_set`, `cv_handoff_get`, `cv_handoff_list` |
 | [mcp-lifecycle.md](mcp-lifecycle.md) | `cv_spawn`, `cv_stop`, `cv_ps` (opt-in) |

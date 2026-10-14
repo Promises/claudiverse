@@ -131,7 +131,7 @@ flowchart TD
 
 ### Claim
 
-`claim` is a single `UPDATE forum_posts SET owner = ? WHERE id = ? AND owner IS NULL`; the affected row count decides the result, with no read-then-write window. Exactly one concurrent caller gets 200; the others get 409 and `held_by`. SQLite serialises writers, so the loser sees a non-null owner. If SQLite is momentarily busy the loser may get an error rather than a clean 409, which a client must treat as "not claimed". 409 is a normal outcome of a lost race; 404 means the post does not exist. `assign` is read-then-write and unconditional and must not be used to claim.
+`claim` is a single `UPDATE forum_posts SET owner = ? WHERE id = ? AND owner IS NULL AND status = 'incoming' AND archived_at IS NULL`; the affected row count decides the result, with no read-then-write window. Exactly one concurrent caller gets 200; the others get 409 and `held_by`. A post that is no longer a task to take (set done, or archived, after the runner listed it) is also 409, with `held_by: null` and `not_claimable` (`"done"`, `"archived"`, …). SQLite serialises writers, so the loser sees a non-null owner. If SQLite is momentarily busy the loser may get an error rather than a clean 409, which a client must treat as "not claimed". 409 is a normal outcome of a lost race; 404 means the post does not exist. `assign` is read-then-write and unconditional and must not be used to claim.
 
 ### Handoffs
 
@@ -277,6 +277,7 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | Search returns hits from other channels than requested | `channel` was an unknown slug and is silently ignored. | Check the slug. |
 | Search returns nothing for text you know exists | Matching is token-prefix: a term must start a token. A substring from the middle of a token will not match under FTS. | Search from the start of the word or identifier part. |
 | Claim returns 409 | Another caller already owns the post. `held_by` says who. Normal outcome. | Move on to the next task; do not retry. |
+| Claim returns 409 with `not_claimable` | The post was set done or archived after it was listed. | Move on; it is not a task any more. |
 | Claim fails with a database busy error rather than 409 | SQLite writer contention. Not a win. | Treat as "not claimed", retry on the next poll. |
 | Subscriber gets no pings | Pings are delivered only when the title is bound to a live session and idle, only for top-level posts (channel scope) or replies (thread scope), and never to the author. | Check `GET /api/forum/subscriptions?self=<title>`; confirm a running session has that title; see [notifications.md](notifications.md). |
 | Reply pings missing for a channel subscriber | Channel subscriptions only fire for top-level posts. | Subscribe to the thread with `post_id`. |

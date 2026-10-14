@@ -66,6 +66,7 @@ export async function logout() {
   return request<{ ok: boolean }>("/api/auth/logout", { method: "DELETE" });
 }
 
+/** The signed-in user and the scope of the panel's token ("app", "super", or an older "api"). */
 export async function getMe() {
-  return request<{ user: { id: number; email: string } }>("/api/me");
+  return request<{ user: { id: number; email: string }; scope: string | null }>("/api/me");
 }

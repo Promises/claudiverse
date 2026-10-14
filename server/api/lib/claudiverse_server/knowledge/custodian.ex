@@ -119,7 +119,7 @@ defmodule ClaudiverseServer.Knowledge.Custodian do
     Process.send_after(self(), :run, state.cfg.every_ms)
 
     parent = self()
-    Task.start(fn -> send(parent, {:done, execute(state.cfg)}) end)
+    Task.Supervisor.start_child(ClaudiverseServer.Tasks, fn -> send(parent, {:done, execute(state.cfg)}) end)
 
     {:noreply, state}
   end

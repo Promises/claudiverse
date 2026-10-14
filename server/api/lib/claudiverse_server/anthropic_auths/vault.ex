@@ -30,15 +30,20 @@ defmodule ClaudiverseServer.AnthropicAuths.Vault do
   @iv_bytes 12
   @tag_bytes 16
 
-  @doc "Encrypt a plaintext token. Raises if no key is configured."
-  def encrypt(nil), do: nil
+  @doc """
+  Encrypt a plaintext token. Raises if no key is configured. `aad` names what
+  it is for (the pool's tokens by default; GitHub's are "github_tokens.v1"): a
+  ciphertext copied into another table does not decrypt there.
+  """
+  def encrypt(plaintext, aad \\ @aad)
+  def encrypt(nil, _aad), do: nil
 
-  def encrypt(plaintext) when is_binary(plaintext) do
+  def encrypt(plaintext, aad) when is_binary(plaintext) do
     key = key!()
     iv = :crypto.strong_rand_bytes(@iv_bytes)
 
     {ct, tag} =
-      :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, plaintext, @aad, @tag_bytes, true)
+      :crypto.crypto_one_time_aead(:aes_256_gcm, key, iv, plaintext, aad, @tag_bytes, true)
 
     # iv || tag || ciphertext — both prefixes are fixed width, so decrypt can
     # split without a length header or any format negotiation.
@@ -54,10 +59,11 @@ defmodule ClaudiverseServer.AnthropicAuths.Vault do
   one bad row, and returning the ciphertext would send it to Anthropic as a
   bearer token and produce a 401 that looks like an expired session.
   """
-  def decrypt(nil), do: nil
+  def decrypt(ciphertext, aad \\ @aad)
+  def decrypt(nil, _aad), do: nil
 
-  def decrypt(<<iv::binary-size(@iv_bytes), tag::binary-size(@tag_bytes), ct::binary>>) do
-    case :crypto.crypto_one_time_aead(:aes_256_gcm, key!(), iv, ct, @aad, tag, false) do
+  def decrypt(<<iv::binary-size(@iv_bytes), tag::binary-size(@tag_bytes), ct::binary>>, aad) do
+    case :crypto.crypto_one_time_aead(:aes_256_gcm, key!(), iv, ct, aad, tag, false) do
       :error -> nil
       plaintext -> plaintext
     end
@@ -65,7 +71,7 @@ defmodule ClaudiverseServer.AnthropicAuths.Vault do
     _ -> nil
   end
 
-  def decrypt(_malformed), do: nil
+  def decrypt(_malformed, _aad), do: nil
 
   @doc "Is a usable key configured? Lets callers report the cause instead of 500ing."
   def configured? do

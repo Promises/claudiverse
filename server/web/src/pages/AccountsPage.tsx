@@ -12,6 +12,8 @@ import {
 } from "../api/anthropicAuths";
 import { Link } from "react-router-dom";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import FreshSignIn from "../components/FreshSignIn";
+import { isAppOnlyError } from "../lib/appOnly";
 import styles from "./AccountsPage.module.css";
 
 const STATUS_CLASS: Record<string, string> = {
@@ -203,7 +205,7 @@ function AuthCard({
         </button>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
+      {error && (isAppOnlyError(error) ? <FreshSignIn /> : <div className={styles.error}>{error}</div>)}
     </div>
   );
 }
@@ -313,7 +315,7 @@ function EnrolForm({ onAdded }: { onAdded: () => void }) {
         </>
       )}
 
-      {error && <div className={styles.error}>{error}</div>}
+      {error && (isAppOnlyError(error) ? <FreshSignIn /> : <div className={styles.error}>{error}</div>)}
     </div>
   );
 }
@@ -366,7 +368,7 @@ export default function AccountsPage() {
       {loading ? (
         <p className={styles.empty}>Loading…</p>
       ) : error ? (
-        <p className={styles.error}>{error}</p>
+        isAppOnlyError(error) ? <FreshSignIn /> : <p className={styles.error}>{error}</p>
       ) : auths.length === 0 ? (
         <p className={styles.empty}>No accounts yet.</p>
       ) : (

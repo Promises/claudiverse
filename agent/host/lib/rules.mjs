@@ -260,9 +260,11 @@ export function spawnRuntime(cfg) {
 // What an app may ask this machine's plain spawn for, sent when the agent
 // joins: the options it understands, and how the spawn runtime pools. A
 // pool-only runtime has no Claude login of its own: its seats always use the
-// server's pool.
-export function spawnChoices(rt) {
-  return { options: ["model", "pooled"], pool_only: rt?.poolOnly === true, pooled: rt?.pooled === true };
+// server's pool. `runtime` and `version` (the Claude Code build it pins) say
+// what a plain seat, or a restarted one, runs here now.
+export function spawnChoices(rt, version = null) {
+  return { options: ["model", "pooled"], pool_only: rt?.poolOnly === true, pooled: rt?.pooled === true,
+           runtime: rt?.name ?? null, version: typeof version === "string" ? version : null };
 }
 
 // cv-spawn's flags for a plain spawn on runtime `rt` (null: no spawn_runtime):

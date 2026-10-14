@@ -129,11 +129,13 @@ defmodule ClaudiverseServerWeb.TaskController do
   def complete(conn, %{"id" => id, "worker" => w} = p) do
     held = if p["held_task_id"], do: to_int(p["held_task_id"])
 
-    case Tasks.complete(to_int(id), w, held_task_id: held) do
+    case Tasks.complete(to_int(id), w, held_task_id: held, outcome: p["outcome"]) do
       {:ok, %{task: t, stranded: s}} ->
         json(conn, %{
           ok: true,
           task: task_json(t),
+          # The DONE ping the server sent itself (cv_task_done sends none of its own then).
+          announced: t.lane && "tasks:" <> t.lane,
           stranded: s && task_json(s),
           note:
             s &&

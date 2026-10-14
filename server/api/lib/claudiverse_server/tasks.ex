@@ -242,10 +242,32 @@ defmodule ClaudiverseServer.Tasks do
           end
 
         case result do
-          {:ok, t} -> {:ok, %{task: t, stranded: stranded}}
-          err -> err
+          {:ok, t} ->
+            announce_done(t, worker, opts[:outcome])
+            {:ok, %{task: t, stranded: stranded}}
+
+          err ->
+            err
         end
     end
+  end
+
+  # The lane's watchers hear of a DONE from the server itself, as the
+  # transition happens: `tasks:<lane>` (cv_subscribe). It used to be the
+  # worker's MCP sending it, and only with CV_TASK_REPORT=notify in its config;
+  # without it the report went to a forum channel named after the lane. MEASURED
+  # 2026-10-14: #2167's DONE pinged nobody (no such config, no such channel).
+  # A worker that dies mid-report cannot lose it either.
+  defp announce_done(%Task{lane: lane} = t, worker, outcome) when is_binary(lane) do
+    line = if is_binary(outcome) and outcome != "", do: ": " <> clip(outcome, 160), else: ""
+    ClaudiverseServer.Notifications.Router.report("tasks:" <> lane, "DONE task ##{t.id} (#{worker})#{line} — cv_task_show #{t.id}")
+  end
+
+  defp announce_done(_t, _worker, _outcome), do: :ok
+
+  defp clip(text, n) do
+    one = text |> String.replace(~r/\s+/u, " ") |> String.trim()
+    if String.length(one) > n, do: String.slice(one, 0, n - 1) <> "…", else: one
   end
 
   defp adopt_if_unclaimed(%Task{state: "RUNNING"} = task, worker) when not is_nil(worker), do: task
@@ -340,6 +362,11 @@ defmodule ClaudiverseServer.Tasks do
   reported "busy" for four and a half hours, and qemu sat at 162% and 309%
   while genuinely building. Confirm with the runner's CPU-tree sampling before
   acting — do not reap on this alone.
+
+  A runner's escalation is a PROGRESS event too (`**RUNNER <slot>** — …`),
+  and it says the opposite of progress: it does not count. MEASURED
+  2026-10-14: two workers sat at the same dialog; the one whose runner had
+  already escalated read as healthy, as its escalation was its newest event.
   """
   def stalled_tasks(fleet, minutes \\ 45) do
     cutoff = DateTime.utc_now() |> DateTime.add(-minutes * 60, :second)
@@ -347,6 +374,7 @@ defmodule ClaudiverseServer.Tasks do
     latest =
       from(e in TaskEvent,
         where: e.kind in ["PROGRESS", "STARTED", "CLAIMED"],
+        where: not (e.kind == "PROGRESS" and like(e.detail, "**RUNNER %")),
         group_by: e.task_id,
         select: {e.task_id, max(e.at)}
       )

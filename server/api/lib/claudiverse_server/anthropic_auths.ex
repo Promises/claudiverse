@@ -277,6 +277,7 @@ defmodule ClaudiverseServer.AnthropicAuths do
 
     with {:ok, updated} <-
            update_auth(auth, %{usage_snapshot: usage, usage_checked_at: DateTime.truncate(DateTime.utc_now(), :second)}) do
+      keep_sample(updated.id, usage)
       ClaudiverseServer.AnthropicAuths.UsagePoller.apply_threshold(updated)
       fresh = get_auth(updated.id)
 
@@ -287,6 +288,17 @@ defmodule ClaudiverseServer.AnthropicAuths do
 
       {:ok, fresh}
     end
+  end
+
+  # The reading, for the usage history. Bookkeeping: a failed write is logged
+  # and never costs the reading.
+  defp keep_sample(auth_id, usage) do
+    case ClaudiverseServer.AnthropicAuths.UsageHistory.record(auth_id, usage) do
+      {:ok, _} -> :ok
+      {:error, e} -> Logger.warning("[anthropic_auths] usage sample not kept for auth #{auth_id}: #{inspect(e)}")
+    end
+  rescue
+    e -> Logger.warning("[anthropic_auths] usage sample not kept for auth #{auth_id}: #{Exception.message(e)}")
   end
 
   defp now_iso, do: DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()

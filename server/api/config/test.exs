@@ -43,3 +43,6 @@ config :claudiverse_server, ClaudiverseServer.Schedules.Scheduler, enabled: fals
 # Auto-resume: no boot or ticks of its own, and the proxy reports nothing,
 # unless a test turns it on; the auto-resume tests boot and tick by hand.
 config :claudiverse_server, ClaudiverseServer.AutoResume, enabled: false, track: false
+
+# Tests read GitHub by hand (GitHub.Poller.poll_repo/3 …) from a local stand-in.
+config :claudiverse_server, ClaudiverseServer.GitHub.Poller, enabled: false

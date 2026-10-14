@@ -99,9 +99,10 @@ test("spawn flags: the model asked for; pooling as asked, but a pool-only runtim
 });
 
 test("spawn choices: what an app may ask this machine's plain spawn for", () => {
-  assert.deepEqual(spawnChoices({ poolOnly: true, pooled: true }), { options: ["model", "pooled"], pool_only: true, pooled: true });
-  assert.deepEqual(spawnChoices({ poolOnly: false, pooled: false }), { options: ["model", "pooled"], pool_only: false, pooled: false });
-  assert.deepEqual(spawnChoices(null), { options: ["model", "pooled"], pool_only: false, pooled: false });
+  assert.deepEqual(spawnChoices({ name: "stock+mod", poolOnly: true, pooled: true }, "2.1.296"),
+    { options: ["model", "pooled"], pool_only: true, pooled: true, runtime: "stock+mod", version: "2.1.296" });
+  assert.deepEqual(spawnChoices({ name: "x", poolOnly: false, pooled: false }), { options: ["model", "pooled"], pool_only: false, pooled: false, runtime: "x", version: null });
+  assert.deepEqual(spawnChoices(null), { options: ["model", "pooled"], pool_only: false, pooled: false, runtime: null, version: null });
 });
 
 test("default titles are made safe for tmux", async () => {

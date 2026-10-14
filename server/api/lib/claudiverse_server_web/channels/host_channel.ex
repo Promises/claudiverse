@@ -10,7 +10,8 @@ defmodule ClaudiverseServerWeb.HostChannel do
   and from agents with `start_profile`: "modes" [mode], "runtimes" [%{"name",
   "version"}], "mcp" [catalog name] — the choices a profile may make there.
   From 0.13: "spawn" %{"options" [model|pooled], "pool_only", "pooled"},
-  what a plain spawn may ask for there (nil from an older agent).
+  what a plain spawn may ask for there (nil from an older agent); from 0.14
+  also "runtime" and "version", what a plain or restarted seat runs there.
   Server -> agent: "request" %{"request_id", "op", "args"}.
   Agent -> server: "reply" %{"request_id", "ok", "result" | "code", "error"}.
   """
@@ -87,7 +88,7 @@ defmodule ClaudiverseServerWeb.HostChannel do
     user_id = socket.assigns.current_user.id
     name = socket.assigns.host_name
     live = socket.assigns[:live_seats]
-    Task.start(fn -> ClaudiverseServer.Profiles.autostart(user_id, name, live) end)
+    Task.Supervisor.start_child(ClaudiverseServer.Tasks, fn -> ClaudiverseServer.Profiles.autostart(user_id, name, live) end)
     {:noreply, socket}
   end
 
@@ -115,7 +116,9 @@ defmodule ClaudiverseServerWeb.HostChannel do
 
   @spawn_options ~w(model pooled)
   defp spawn_choices(%{"options" => options} = s) when is_list(options) do
-    %{options: Enum.filter(options, &(&1 in @spawn_options)), pool_only: s["pool_only"] == true, pooled: s["pooled"] == true}
+    %{options: Enum.filter(options, &(&1 in @spawn_options)), pool_only: s["pool_only"] == true, pooled: s["pooled"] == true,
+      # 0.14: the runtime a plain (or restarted) seat gets, and its version.
+      runtime: if(is_binary(s["runtime"]), do: s["runtime"]), version: if(is_binary(s["version"]), do: s["version"])}
   end
 
   defp spawn_choices(_), do: nil

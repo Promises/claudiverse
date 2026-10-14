@@ -1,0 +1,30 @@
+{
+  "source": "Claude Code 2.1.296's built-in model catalog and its 1M rule, and Anthropic's models overview, read 2026-10-13",
+  "models": [
+    {"id": "claude-opus-5-5", "label": "Opus 5.5", "family": "opus", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-opus-5", "label": "Opus 5", "family": "opus", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-sonnet-5-5", "label": "Sonnet 5.5", "family": "sonnet", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-sonnet-5", "label": "Sonnet 5", "family": "sonnet", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-haiku-5-5", "label": "Haiku 5.5", "family": "haiku", "one_m": true, "accepts_1m_suffix": false, "since": "2.1.293", "older": false},
+    {"id": "claude-fable-5-1", "label": "Fable 5.1", "family": "fable", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-fable-5", "label": "Fable 5", "family": "fable", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-mythos-5-1", "label": "Mythos 5.1", "family": "mythos", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-mythos-5", "label": "Mythos 5", "family": "mythos", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-haiku-4-5", "label": "Haiku 4.5", "family": "haiku", "one_m": false, "accepts_1m_suffix": false, "since": null, "older": false},
+    {"id": "claude-opus-4-8", "label": "Opus 4.8", "family": "opus", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": true},
+    {"id": "claude-opus-4-7", "label": "Opus 4.7", "family": "opus", "one_m": true, "accepts_1m_suffix": false, "since": null, "older": true},
+    {"id": "claude-opus-4-6", "label": "Opus 4.6", "family": "opus", "one_m": false, "accepts_1m_suffix": true, "since": null, "older": true},
+    {"id": "claude-opus-4-5", "label": "Opus 4.5", "family": "opus", "one_m": false, "accepts_1m_suffix": false, "since": null, "older": true},
+    {"id": "claude-opus-4-1", "label": "Opus 4.1", "family": "opus", "one_m": false, "accepts_1m_suffix": false, "since": null, "older": true},
+    {"id": "claude-sonnet-4-6", "label": "Sonnet 4.6", "family": "sonnet", "one_m": false, "accepts_1m_suffix": true, "since": null, "older": true},
+    {"id": "claude-sonnet-4-5", "label": "Sonnet 4.5", "family": "sonnet", "one_m": false, "accepts_1m_suffix": true, "since": null, "older": true},
+    {"id": "claude-sonnet-4-0", "label": "Sonnet 4", "family": "sonnet", "one_m": false, "accepts_1m_suffix": true, "since": null, "older": true}
+  ],
+  "aliases": [
+    {"id": "default", "label": "Default"},
+    {"id": "opus", "label": "Opus (latest)"},
+    {"id": "sonnet", "label": "Sonnet (latest)"},
+    {"id": "haiku", "label": "Haiku (latest)"},
+    {"id": "opusplan", "label": "Opus plan"}
+  ]
+}

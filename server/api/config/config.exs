@@ -7,6 +7,10 @@
 # General application configuration
 import Config
 
+# Request parameters are logged at debug level: never a password, a token
+# (a pasted GitHub token, a join code's seat token) or a secret.
+config :phoenix, :filter_parameters, ["password", "token", "secret"]
+
 config :claudiverse_server,
   ecto_repos: [ClaudiverseServer.Repo],
   generators: [timestamp_type: :utc_datetime]

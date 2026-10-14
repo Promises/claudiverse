@@ -18,7 +18,7 @@ defmodule ClaudiverseServer.Profiles.Profile do
   @modes ~w(default acceptEdits plan auto)
   @efforts ~w(low medium high xhigh max)
 
-  @editable ~w(machine folder fleet role can_notify runtime model effort permission_mode mcp pooled autostart resume debug)a
+  @editable ~w(machine folder fleet role can_notify runtime model effort permission_mode mcp pooled autostart resume debug protected)a
 
   schema "profiles" do
     field :name, :string
@@ -39,6 +39,8 @@ defmodule ClaudiverseServer.Profiles.Profile do
     # the preferred account and fails over with the pool (operator, 2026-10-07).
     field :pooled, :boolean, default: true
     field :autostart, :boolean, default: false
+    # Left out of a bulk restart unless named; a single restart is confirmed (Restarts).
+    field :protected, :boolean, default: false
     field :resume, :string, default: "latest"
     field :debug, :boolean, default: false
     field :last_start, :map

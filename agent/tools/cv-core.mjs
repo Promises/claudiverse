@@ -35,21 +35,32 @@ function authHeaders(extra = {}) {
 // idempotent and also retry when the connection broke mid-flight. An HTTP
 // status (4xx/5xx) is a server ANSWER, never retried here.
 const NEVER_CONNECTED = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "UND_ERR_CONNECT_TIMEOUT"]);
-const BROKE_MID_FLIGHT = new Set(["ECONNRESET", "EPIPE", "UND_ERR_SOCKET", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT"]);
+const BROKE_MID_FLIGHT = new Set(["ECONNRESET", "EPIPE", "UND_ERR_SOCKET", "UND_ERR_HEADERS_TIMEOUT", "UND_ERR_BODY_TIMEOUT", "TIMEOUT"]);
 const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000]; // ~15 s: covers a server restart
 
+// Each attempt ends after this, answered or not. Without it a connection that
+// is open but silent waits for undici's own limit, MEASURED 301 s on Node 24
+// (UND_ERR_HEADERS_TIMEOUT), and a GET retries that 5×: a runner's halt check
+// could sit ~25 min with nothing logged. CLAUDIVERSE_REQUEST_TIMEOUT_MS raises
+// it for a caller with a slower endpoint.
+const REQUEST_TIMEOUT_MS = Number(process.env.CLAUDIVERSE_REQUEST_TIMEOUT_MS) || 30_000;
+
 function transportCode(e) {
+  if (e?.name === "TimeoutError") return "TIMEOUT";
   return e?.cause?.code || e?.code || null;
 }
 
 async function fetchRetrying(url, init, idempotent) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fetch(url, init);
+      // A timed-out WRITE is not retried (BROKE_MID_FLIGHT is for reads): the
+      // server may have seen it.
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     } catch (e) {
       const code = transportCode(e);
       const retryable = NEVER_CONNECTED.has(code) || (idempotent && BROKE_MID_FLIGHT.has(code));
       if (!retryable || attempt >= RETRY_DELAYS_MS.length) {
+        if (code === "TIMEOUT") e = new Error(`no answer within ${REQUEST_TIMEOUT_MS / 1000} s`, { cause: e });
         if (code && e instanceof Error && !e.message.includes(code)) e.message += ` (${code}, after ${attempt + 1} attempt(s))`;
         throw e;
       }
@@ -248,9 +259,19 @@ export const answer = (id, text) => sendEvent(id, "answer", { response: text });
 export const decline = (id) => sendEvent(id, "decline", {});
 
 export const subscribe = (self, watch, mode) => postApi("/api/notify/subscribe", { self, watch, ...(mode ? { mode } : {}) });
-export const ack = (self, target) => postApi("/api/notify/ack", { self, target });
+// Clears only pings `self` was shown (listed by `pending`); with `{ acted: true }`
+// (cv_send/cv_answer/cv_decline on `target`), that title's queued pings.
+// Answers {cleared, kept}.
+export const ack = (self, target, extra = {}) => postApi("/api/notify/ack", { self, target, ...extra });
 export const pending = (self) => api("/api/notify/pending?self=" + encodeURIComponent(self));
+// GitHub: what this user's seats watch (gh: titles, @github) and the token that
+// reads each; every repository the operator's tokens reach.
+export const githubSubscriptions = () => api("/api/github/subscriptions");
+export const githubRepos = () => api("/api/github/repos");
 export const report = (self, text) => postApi("/api/notify/report", { self, text });
+// One seat, by title, whether it watches anything or not: a runner's
+// escalation to the seat that wrote the task. 404 for a title not the user's.
+export const notifyDirect = (self, to, text) => postApi("/api/notify/direct", { self, to, text });
 
 // Ask the operator to come to this seat (the app notifies their phone). A
 // refusal (403) is returned, not thrown, so the caller can say why.
@@ -412,7 +433,9 @@ export async function forumClaim(id, owner, self) {
   }, false);
   if (res.status === 409) {
     const body = await res.json().catch(() => ({}));
-    return { claimed: false, heldBy: body.held_by ?? null };
+    // notClaimable: the post is no longer a task to take (done, archived),
+    // which the server now checks in the claim itself.
+    return { claimed: false, heldBy: body.held_by ?? null, notClaimable: body.not_claimable ?? null };
   }
   if (res.status === 404) return { claimed: false, notFound: true };
   if (!res.ok) throw new Error(`POST claim ${id} → ${res.status} ${res.statusText}`);
